@@ -179,6 +179,7 @@ let touchLeft = false
 let touchRight = false
 let touchJump = false
 let touchDig = false
+let touchDigFired = false
 
 let touchUp = false
 let touchDown = false
@@ -309,10 +310,17 @@ touchRight = hit(mobileControls.right)
 
 if(hit(mobileControls.center)){
 
-if(state === "garden"){
+if(showRingPopup){
+// dismiss the popup directly - flag gets cleared before game loop runs
+showRingPopup = false
+state = "coastal"
+luna.x = 50
+luna.y = 500
+} else if(state === "garden"){
 // trigger dig directly so it isn't cleared before the game loop reads it
 if(nearDigSpot && digTimer === 0){
 digTimer = 12
+touchDigFired = true
 }
 } else {
 // trigger jump directly so it isn't cleared before the game loop reads it
@@ -629,7 +637,7 @@ digSpots.forEach((s,i)=>{
 let d=Math.hypot(luna.x-s.x,luna.y-s.y)
 
 
-if(d<30 && keys[" "] && !s.dug){
+if(d<30 && (keys[" "] || touchDigFired) && !s.dug){
 
 s.dug = true
 digTimer = 12
@@ -654,6 +662,8 @@ spacePressedLastFrame = true
 }
 
 })
+
+touchDigFired = false
 
 }
 
