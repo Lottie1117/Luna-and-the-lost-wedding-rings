@@ -276,6 +276,20 @@ keys[e.key] = false
 
 /* TOUCH START (START BUTTON) */
 
+canvas.addEventListener("click", e => {
+
+let rect = canvas.getBoundingClientRect()
+let x = (e.clientX - rect.left) * (canvas.width/rect.width)
+let y = (e.clientY - rect.top) * (canvas.height/rect.height)
+
+if((state === "win" || state === "gameover") &&
+x > W/2-100 && x < W/2+100 &&
+y > 470 && y < 520){
+restartGame()
+}
+
+})
+
 canvas.addEventListener("touchmove", e => {
 e.preventDefault()
 }, { passive: false })
@@ -301,6 +315,12 @@ y < startButton.y + startButton.h
 startGame()
 }
 
+}
+
+if((state === "win" || state === "gameover") &&
+x > W/2-100 && x < W/2+100 &&
+y > 470 && y < 520){
+restartGame()
 }
 
 /* MOBILE CONTROL BUTTONS */
@@ -920,45 +940,25 @@ luna.vy=0
 
 /* scrolling */
 
-scroll+=1.5
+scroll+=3
 
 /* spawn platforms */
 
 if(Math.random()<0.01) spawnPlatformCluster()
 
-/* PATH COLLECTIBLES */
-
-if(Math.random() < 0.008){
-
-flowersCoastal.push({
-x: W + 100,
-y: 520 + Math.random()*20
-})
-
-}
-
-if(Math.random() < 0.004){
-
-bones.push({
-x: W + 100,
-y: 500
-})
-
-}
-
 /* move platforms */
 
 platformsCoastal.forEach(p=>{
-p.x-=1.5
+p.x-=3
 })
 
 /* move flowers */
 
 flowersCoastal.forEach(f=>{
 
-f.x-=1.5
+f.x-=3
 
-if(Math.abs(f.x-luna.x)<30 && Math.abs(f.y-luna.y)<40){
+if(Math.abs(f.x-luna.x)<20 && Math.abs(f.y-luna.y)<25){
 flowers++
 f.x=-100
 }
@@ -969,9 +969,9 @@ f.x=-100
 
 bones.forEach(b=>{
 
-b.x-=1.5
+b.x-=3
 
-if(Math.abs(b.x-luna.x)<30 && Math.abs(b.y-luna.y)<40){
+if(Math.abs(b.x-luna.x)<20 && Math.abs(b.y-luna.y)<25){
 energy=Math.min(100,energy+35)
 b.x=-100
 }
@@ -980,8 +980,14 @@ b.x=-100
 
 /* level end */
 
-if(scroll>2000){
+if(scroll > 4500){
 state="village"
+scroll = 0
+obstacles = []
+bonesVillage = []
+flowersVillage = []
+luna.x = 100
+luna.y = 540
 }
 
 }
@@ -1145,7 +1151,7 @@ function spawnVillageFlower(){
 
 flowersVillage.push({
 x: W + 100,
-y: 450
+y: 530
 })
 
 }
@@ -1162,7 +1168,7 @@ y:440
 
 function updateVillage(){
 
-scroll += 2
+scroll += 3
 
 if(keys["ArrowRight"] || touchRight){
 luna.x += 3
@@ -1182,7 +1188,7 @@ f.x -= 4
 
 flowersVillage.forEach(f=>{
 
-if(Math.abs(f.x-luna.x)<30 && Math.abs(f.y-luna.y)<40){
+if(Math.abs(f.x-luna.x)<20 && Math.abs(f.y-luna.y)<25){
 
 flowers++
 f.x = -100
@@ -1217,7 +1223,7 @@ bonesVillage.forEach(b=>{
 
 b.x -= 4
 
-if(Math.abs(b.x-luna.x)<30){
+if(Math.abs(b.x-luna.x)<25 && Math.abs(b.y-luna.y)<40){
 
 energy = Math.min(100, energy + 30)
 b.x = -100
@@ -1231,11 +1237,11 @@ obstacles.forEach(o=>{
 o.x-=4
 
 if(
-Math.abs(o.x - luna.x) < 30 &&
-Math.abs(o.y - luna.y) < 30 &&
+Math.abs(o.x - luna.x) < 35 &&
+Math.abs(o.y - luna.y) < 80 &&
 !o.hit
 ){
-energy -= 3
+energy -= 10
 o.hit = true
 }
 
@@ -1253,8 +1259,10 @@ luna.y=540
 luna.vy=0
 }
 
-if(obstacles.length>20){
+if(scroll > 4500){
 state="altar"
+luna.x = W/2
+luna.y = 450
 }
 
 }
@@ -1540,10 +1548,29 @@ ctx.fillRect(c.x, c.y, c.size, c.size)
 ctx.fillStyle="#333"
 ctx.textAlign="center"
 ctx.font="28px sans-serif"
-ctx.fillText("Congratulations Jonny & Lottie!",W/2,280)
+ctx.fillText("Congratulations Jonny & Lottie!",W/2,260)
 
 ctx.font="18px sans-serif"
-ctx.fillText("Luna delivered the rings!",W/2,320)
+ctx.fillText("Luna delivered the rings!",W/2,300)
+
+ctx.font="16px sans-serif"
+ctx.fillText("🌷 Flowers collected: " + flowers, W/2, 350)
+ctx.fillText("⚡ Energy remaining: " + Math.round(energy) + "%", W/2, 380)
+
+let score = flowers * 10 + Math.round(energy)
+ctx.font="bold 22px sans-serif"
+ctx.fillStyle="#e05cb0"
+ctx.fillText("Total score: " + score, W/2, 430)
+
+// restart button
+ctx.fillStyle="#e05cb0"
+ctx.beginPath()
+ctx.roundRect(W/2-100, 470, 200, 50, 25)
+ctx.fill()
+
+ctx.fillStyle="white"
+ctx.font="bold 18px sans-serif"
+ctx.fillText("Play again 🐾", W/2, 501)
 
 }
 
@@ -1559,6 +1586,24 @@ ctx.font="24px sans-serif"
 ctx.fillText("Oh no!",W/2,260)
 ctx.fillText("Luna took a nap",W/2,300)
 ctx.fillText("and missed the wedding!",W/2,340)
+
+ctx.font="16px sans-serif"
+ctx.fillText("🌷 Flowers collected: " + flowers, W/2, 385)
+
+let score = flowers * 10 + Math.round(energy)
+ctx.font="bold 22px sans-serif"
+ctx.fillStyle="#aaa"
+ctx.fillText("Total score: " + score, W/2, 425)
+
+// restart button
+ctx.fillStyle="#555"
+ctx.beginPath()
+ctx.roundRect(W/2-100, 460, 200, 50, 25)
+ctx.fill()
+
+ctx.fillStyle="white"
+ctx.font="bold 18px sans-serif"
+ctx.fillText("Try again 🐾", W/2, 491)
 
 }
 
@@ -1599,6 +1644,29 @@ color: [
 function startGame(){
 state = "garden"
 generateDigSpots()
+}
+
+function restartGame(){
+energy = 100
+flowers = 0
+hasRing = false
+showRingPopup = false
+confetti = []
+dust = []
+scroll = 0
+platformsCoastal = []
+flowersCoastal = []
+bones = []
+obstacles = []
+bonesVillage = []
+flowersVillage = []
+luna.x = 200
+luna.y = 500
+luna.vx = 0
+luna.vy = 0
+state = "garden"
+generateDigSpots()
+digTimer = 0
 }
 
 
