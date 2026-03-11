@@ -217,7 +217,7 @@ dir:1
 
 const couple = {
 x: W/2,
-y: 120
+y: 220
 }
 
 /* UI */
@@ -276,7 +276,13 @@ keys[e.key] = false
 
 /* TOUCH START (START BUTTON) */
 
+canvas.addEventListener("touchmove", e => {
+e.preventDefault()
+}, { passive: false })
+
 canvas.addEventListener("touchstart", e => {
+
+e.preventDefault()
 
 let rect = canvas.getBoundingClientRect()
 let touch = e.touches[0]
@@ -316,6 +322,13 @@ showRingPopup = false
 state = "coastal"
 luna.x = 50
 luna.y = 500
+} else if(state === "altar"){
+// give the rings directly if close enough
+let distance = Math.hypot(luna.x - couple.x, luna.y - couple.y)
+if(distance < 100){
+spawnConfetti()
+state = "win"
+}
 } else if(state === "garden"){
 // trigger dig directly so it isn't cleared before the game loop reads it
 if(nearDigSpot && digTimer === 0){
@@ -329,7 +342,7 @@ luna.vy = -10
 
 }
 
-if(state === "garden"){
+if(state === "garden" || state === "altar"){
 
 touchUp = hit(gardenControls.up)
 touchDown = hit(gardenControls.down)
@@ -443,16 +456,16 @@ mobileControls.right.x - s/2,
 mobileControls.right.y - s/2,
 s,s)
 
-let centerImage = (state === "garden") ? btnDig : btnJump
+let centerImage = (state === "garden" || state === "altar") ? btnDig : btnJump
 
 ctx.drawImage(centerImage,
 mobileControls.center.x - s/2,
 mobileControls.center.y - s/2,
 s,s)
 
-/* EXTRA GARDEN BUTTONS */
+/* EXTRA GARDEN/ALTAR BUTTONS */
 
-if(state === "garden"){
+if(state === "garden" || state === "altar"){
 
 ctx.drawImage(btnJump,
 gardenControls.up.x - s/2,
@@ -1463,7 +1476,7 @@ luna.x - couple.x,
 luna.y - couple.y
 )
 
-if(distance < 40 && keys[" "]){
+if(distance < 100 && keys[" "]){
 spawnConfetti()
 state = "win"
 }
@@ -1500,7 +1513,7 @@ ctx.font="18px sans-serif"
 ctx.textAlign="center"
 
 ctx.fillText(
-"Press SPACE to hand over the rings!",
+isMobile ? "Tap the centre button to hand over the rings!" : "Press SPACE to hand over the rings!",
 W/2,
 500
 )
@@ -1513,10 +1526,20 @@ drawLuna()
 
 function drawWin(){
 
-ctx.fillStyle="white"
+ctx.fillStyle="#fff9f0"
+ctx.fillRect(0,0,W,H)
+
+confetti.forEach(c=>{
+c.x += c.vx
+c.y += c.vy
+c.vy += 0.1
+ctx.fillStyle = c.color
+ctx.fillRect(c.x, c.y, c.size, c.size)
+})
+
+ctx.fillStyle="#333"
 ctx.textAlign="center"
 ctx.font="28px sans-serif"
-
 ctx.fillText("Congratulations Jonny & Lottie!",W/2,280)
 
 ctx.font="18px sans-serif"
@@ -1525,6 +1548,9 @@ ctx.fillText("Luna delivered the rings!",W/2,320)
 }
 
 function drawGameOver(){
+
+ctx.fillStyle="#1a1a2e"
+ctx.fillRect(0,0,W,H)
 
 ctx.fillStyle="white"
 ctx.textAlign="center"
@@ -1602,6 +1628,16 @@ function draw(){
 
 if(state==="start"){
 drawStart()
+return
+}
+
+if(state==="win"){
+drawWin()
+return
+}
+
+if(state==="gameover"){
+drawGameOver()
 return
 }
 
