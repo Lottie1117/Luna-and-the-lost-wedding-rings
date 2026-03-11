@@ -197,7 +197,7 @@ down: {x: W/2, y: H - 20}
 
 const startButton = {
 x: W/2 - 130,
-y: 616,
+y: 770,
 w: 260,
 h: 60
 }
@@ -310,7 +310,10 @@ touchRight = hit(mobileControls.right)
 if(hit(mobileControls.center)){
 
 if(state === "garden"){
-touchDig = true
+// trigger dig directly so it isn't cleared before the game loop reads it
+if(nearDigSpot && digTimer === 0){
+digTimer = 12
+}
 } else {
 // trigger jump directly so it isn't cleared before the game loop reads it
 luna.vy = -10
@@ -581,7 +584,7 @@ nearDigSpot = true
 
 })
 
-if(nearDigSpot && keys[" "] && digTimer === 0){
+if(nearDigSpot && (keys[" "] || touchDig) && digTimer === 0){
 digTimer = 12
 }
 
