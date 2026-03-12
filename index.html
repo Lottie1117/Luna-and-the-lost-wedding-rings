@@ -324,8 +324,8 @@ keys[e.key] = false
 canvas.addEventListener("click", e => {
 
 let rect = canvas.getBoundingClientRect()
-let x = (e.clientX - rect.left) * (canvas.width/rect.width)
-let y = (e.clientY - rect.top) * (canvas.height/rect.height)
+let x = (e.clientX - rect.left) * (W / rect.width)
+let y = (e.clientY - rect.top) * (H / rect.height)
 
 if(state === "win" &&
 x > W/2-100 && x < W/2+100 &&
@@ -367,8 +367,9 @@ e.preventDefault()
 let rect = canvas.getBoundingClientRect()
 let touch = e.touches[0]
 
-let x = (touch.clientX - rect.left) * (canvas.width/rect.width)
-let y = (touch.clientY - rect.top) * (canvas.height/rect.height)
+let x = (touch.clientX - rect.left) * (W / rect.width)
+let y = (touch.clientY - rect.top) * (H / rect.height)
+
 
 if(state === "start"){
 
