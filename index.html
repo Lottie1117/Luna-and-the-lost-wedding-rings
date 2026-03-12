@@ -209,6 +209,7 @@ let touchRight = false
 let touchJump = false
 let touchDig = false
 let touchDigFired = false
+let tapToContinue = false
 
 let touchUp = false
 let touchDown = false
@@ -370,19 +371,18 @@ let touch = e.touches[0]
 let x = (touch.clientX - rect.left) * (W / rect.width)
 let y = (touch.clientY - rect.top) * (H / rect.height)
 
+tapToContinue = true
 
-if(state === "start"){
 
 if(
-x > startButton.x &&
-x < startButton.x + startButton.w &&
-y > startButton.y &&
-y < startButton.y + startButton.h
+x > startButton.x - 10 &&
+x < startButton.x + startButton.w + 10 &&
+y > startButton.y - 10 &&
+y < startButton.y + startButton.h + 10
 ){
 startGame()
 }
 
-}
 
 if(state === "gardenstory" && !storyJustEntered){
 fadeOutStartMusic(()=>{
@@ -2764,6 +2764,13 @@ gardenStorySpacePressedLastFrame = true
 
 }
 
+
+
+
+
+
+
+
 function updateGardenStory(){
 
 storyJustEntered = false
@@ -2777,6 +2784,11 @@ digTimer = 0
 gardenStorySpacePressedLastFrame = keys[" "] || touchJump || touchDig
 
 }
+
+
+
+
+
 
 function drawGardenStory(){
 ctx.drawImage(gardenStoryImg, 0, 0, W, H)
