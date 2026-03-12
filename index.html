@@ -2,31 +2,42 @@
 <html>
 <head>
 
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 
 <title>Luna and The Lost Wedding Rings</title>
 
 <style>
-body{
-margin:0;
-background:#1a1a2e;
-display:flex;
-justify-content:center;
-align-items:center;
-height:100vh;
-font-family:sans-serif;
-color:white;
-overflow:hidden;
+@font-face {
+font-family: 'GameFont';
+src: url('Rabbits-Goody.woff2');
 }
 
-canvas{
-background:#87ceeb;
-border-radius:12px;
+*, *::before, *::after {
+box-sizing: border-box;
+}
 
-/* responsive scaling */
-width:95vw;
-max-width:900px;
-height:auto;
+html, body {
+margin: 0;
+padding: 0;
+width: 100%;
+height: 100%;
+background: #1a1a2e;
+display: flex;
+justify-content: center;
+align-items: flex-start;
+overflow: hidden;
+font-family: sans-serif;
+color: white;
+}
+
+canvas {
+background: #87ceeb;
+border-radius: 12px;
+display: block;
+/* fit height to viewport so bottom controls are never cut off */
+height: 100svh;
+width: auto;
+max-width: 100vw;
 }
 </style>
 
@@ -39,133 +50,95 @@ height:auto;
 
 <script>
 
-const startScreen = new Image()
-startScreen.src = "startscreen.png"
+/* IMAGE LOADING TRACKER */
 
-const villageTiles = new Image()
-villageTiles.src = "village_tiles.png"
+let loadedCount = 0
+let totalImages = 0
+let allImagesLoaded = false
+
+function loadImage(src){
+totalImages++
+const img = new Image()
+img.onload = () => {
+loadedCount++
+if(loadedCount >= totalImages){
+allImagesLoaded = true
+}
+}
+img.onerror = () => {
+// count errors too so we don't hang forever on missing files
+loadedCount++
+if(loadedCount >= totalImages) allImagesLoaded = true
+}
+img.src = src
+return img
+}
+
+const loadingScreen    = loadImage("loadingscreen.png")
+const startScreen      = loadImage("startscreen.png")
+const lunaFace         = loadImage("lunaface.png")
+const gardenStoryImg   = loadImage("gardenstory.png")
+const coastalStoryImg  = loadImage("coastalstory.png")
+const villageStoryImg  = loadImage("villagestory.png")
+const altarStoryImg    = loadImage("altarstory.png")
+const controlsScreen   = loadImage("controlsscreen.png")
+const villageTiles     = loadImage("village_tiles.png")
+const sprites          = loadImage("sprites.png")
+const tileset          = loadImage("tileset.png")
+const grasstile        = loadImage("grasstile.png")
+const dughole          = loadImage("dughole.png")
+const flowergrass      = loadImage("flowergrass.png")
+const ringbox          = loadImage("ringbox.png")
+const tulip            = loadImage("tulip.png")
+const gravybone        = loadImage("gravybone.png")
+const sea              = loadImage("sea.png")
+const luna1            = loadImage("luna1.png")
+const luna2            = loadImage("luna2.png")
+const lunaDig          = loadImage("lunadig.png")
+const whiteflower      = loadImage("whiteflower.png")
+const purplegrass      = loadImage("purplegrass.png")
+const houseRow         = loadImage("house-row.png")
+const path             = loadImage("path.png")
+const sandpath         = loadImage("sandpath.png")
+const jonny1           = loadImage("jonny1.png")
+const bggrass          = loadImage("bggrass.png")
+const lottie1          = loadImage("lottie1.png")
+const flowerpot        = loadImage("flowerpot.png")
+const crate            = loadImage("crate.png")
+const wall             = loadImage("wall.png")
+const seagull          = loadImage("seagull.png")
+const bgpath           = loadImage("bgpath.png")
+const house1           = loadImage("house1.png")
+const house2           = loadImage("house2.png")
+const house3           = loadImage("house3.png")
+const house4           = loadImage("house4.png")
+const btnLeft          = loadImage("buttonleft.png")
+const btnRight         = loadImage("buttonright.png")
+const btnUp            = loadImage("buttonupjump.png")
+const btnDown          = loadImage("buttondown.png")
+const btnAction        = loadImage("buttonaction.png")
+const grassplatform    = loadImage("grassplatform.png")
+const doublegrassplatform = loadImage("doublegrassplatform.png")
 
 const canvas = document.getElementById("game")
 const ctx = canvas.getContext("2d")
-
-const W = canvas.width	
+const W = canvas.width
 const H = canvas.height
-
 const isMobile = "ontouchstart" in window
 
-
-const sprites = new Image()
-sprites.src = "sprites.png"
-
-const tileset = new Image()
-tileset.src = "tileset.png"
-
-const grasstile = new Image()
-grasstile.src = "grasstile.png"
-
-const dughole = new Image()
-dughole.src = "dughole.png"
-
-const flowergrass = new Image()
-flowergrass.src = "flowergrass.png"
-
-let ringbox = new Image()
-ringbox.src = "ringbox.png"
-
-const tulip = new Image()
-tulip.src = "tulip.png"
-
-const gravybone = new Image()
-gravybone.src = "gravybone.png"
-
-const sea = new Image()
-sea.src = "sea.png"
-
-const luna1 = new Image()
-luna1.src = "luna1.png"
-
-const luna2 = new Image()
-luna2.src = "luna2.png"
-
-const lunaDig = new Image()
-lunaDig.src = "lunadig.png"
-
-const whiteflower = new Image()
-whiteflower.src = "whiteflower.png"
-
-const purplegrass = new Image()
-purplegrass.src = "purplegrass.png"
-
-const houseRow = new Image()
-houseRow.src = "house-row.png"
-
-const path = new Image()
-path.src = "path.png"
-
-const sandpath = new Image()
-sandpath.src = "sandpath.png"
-
-const jonny1 = new Image()
-jonny1.src = "jonny1.png"
-
-const bggrass = new Image()
-bggrass.src = "bggrass.png"
-
-const lottie1 = new Image()
-lottie1.src = "lottie1.png"
-
-const flowerpot = new Image()
-flowerpot.src = "flowerpot.png"
-
-const crate = new Image()
-crate.src = "crate.png"
-
-const wall = new Image()
-wall.src = "wall.png"
-
-const seagull = new Image()
-seagull.src = "seagull.png"
-
-const bgpath = new Image()
-bgpath.src = "bgpath.png"
-
-const house1 = new Image()
-house1.src = "house1.png"
-
-const house2 = new Image()
-house2.src = "house2.png"
-
-const house3 = new Image()
-house3.src = "house3.png"
-
-const house4 = new Image()
-house4.src = "house4.png"
-
-const btnLeft = new Image()
-btnLeft.src = "buttonleft.png"
-
-const btnRight = new Image()
-btnRight.src = "buttonright.png"
-
-const btnJump = new Image()
-btnJump.src = "buttonupjump.png"
-
-const btnDig = new Image()
-btnDig.src = "buttondig.png"
-
 const houses = [house1, house2, house3, house4]
-
-let grassplatform = new Image()
-grassplatform.src = "grassplatform.png"
-
-const doublegrassplatform = new Image()
-doublegrassplatform.src = "doublegrassplatform.png"
 
 let dust = []
 
 let meadowFlowers=[]
 
 let state = "start"
+let controlsTimer = 0
+let gardenStorySpacePressedLastFrame = false
+let coastalStorySpacePressedLastFrame = false
+let villageStorySpacePressedLastFrame = false
+let altarStorySpacePressedLastFrame = false
+let storyJustEntered = false
 
 let confetti = []
 
@@ -181,6 +154,10 @@ let previousState = "start"
 let digTimer = 0
 let nearDigSpot = false
 
+let fadeAlpha = 0
+let fadeDir = 0       // 0=none, 1=fading out, -1=fading in
+let fadeTarget = ""   // state to switch to when fade out completes
+
 let touchLeft = false
 let touchRight = false
 let touchJump = false
@@ -191,15 +168,16 @@ let touchUp = false
 let touchDown = false
 
 const mobileControls = {
-size: 80,
-left: {x: W/2 - 100, y: H - 90},
-center: {x: W/2, y: H - 90},
-right: {x: W/2 + 100, y: H - 90}
+size: 56,
+actionSize: 72,
+left:   {x: W/2 - 74, y: H - 80},
+center: {x: W/2,      y: H - 80},
+right:  {x: W/2 + 74, y: H - 80}
 }
 
 const gardenControls = {
-up: {x: W/2, y: H - 160},
-down: {x: W/2, y: H - 20}
+up:   {x: W/2, y: H - 154},
+down: {x: W/2, y: H - 6}
 }
 
 const startButton = {
@@ -273,9 +251,7 @@ luna.y = 450
 /* START GAME (SPACE) */
 
 if(state === "start" && e.key === " "){
-state = "garden"
-generateDigSpots()
-digTimer = 0
+startGame()
 }
 
 })
@@ -328,6 +304,39 @@ startGame()
 
 }
 
+if(state === "gardenstory" && !storyJustEntered){
+state = "garden"
+generateDigSpots()
+digTimer = 0
+}
+
+if(state === "coastalstory" && !storyJustEntered){
+state = "coastal"
+luna.x = 50
+luna.y = 500
+scroll = 0
+platformsCoastal = []
+flowersCoastal = []
+bones = []
+initCoastalPlatforms()
+}
+
+if(state === "villagestory" && !storyJustEntered){
+state = "village"
+scroll = 0
+obstacles = []
+bonesVillage = []
+flowersVillage = []
+luna.x = 100
+luna.y = 540
+}
+
+if(state === "altarstory" && !storyJustEntered){
+state = "altar"
+luna.x = W/2
+luna.y = 450
+}
+
 if((state === "win" || state === "gameover") &&
 x > W/2-100 && x < W/2+100 &&
 y > 470 && y < 520){
@@ -337,27 +346,21 @@ restartGame()
 /* MOBILE CONTROL BUTTONS */
 
 let s = mobileControls.size / 2
+let sa = mobileControls.actionSize / 2
 
-function hit(b){
-return Math.abs(x - b.x) < s && Math.abs(y - b.y) < s
-}
+function hit(b){ return Math.abs(x - b.x) < s && Math.abs(y - b.y) < s }
+function hitAction(b){ return Math.abs(x - b.x) < sa && Math.abs(y - b.y) < sa }
 
 touchLeft = hit(mobileControls.left)
 touchRight = hit(mobileControls.right)
 
-if(hit(mobileControls.center)){
+if(hitAction(mobileControls.center)){
 
 if(showRingPopup){
-// dismiss the popup directly - flag gets cleared before game loop runs
 showRingPopup = false
-state = "coastal"
-luna.x = 50
-luna.y = 500
-scroll = 0
-platformsCoastal = []
-flowersCoastal = []
-bones = []
-initCoastalPlatforms()
+state = "coastalstory"
+storyJustEntered = true
+coastalStorySpacePressedLastFrame = true
 } else if(state === "altar"){
 // give the rings directly if close enough
 let distance = Math.hypot(luna.x - couple.x, luna.y - couple.y)
@@ -405,10 +408,7 @@ touchDown = false
 function updateStart(){
 
 if(keys[" "] || keys["Space"] || keys["Spacebar"] || touchJump){
-
-state = "garden"
-generateDigSpots()
-
+startGame()
 }
 
 }
@@ -479,39 +479,40 @@ function drawMobileControls(){
 if(!isMobile) return
 
 let s = mobileControls.size
+let sa = mobileControls.actionSize
 
 ctx.globalAlpha = 0.7
+
+if(state === "garden" || state === "coastal" || state === "village" || state === "altar"){
 
 ctx.drawImage(btnLeft,
 mobileControls.left.x - s/2,
 mobileControls.left.y - s/2,
-s,s)
+s, s)
 
 ctx.drawImage(btnRight,
 mobileControls.right.x - s/2,
 mobileControls.right.y - s/2,
-s,s)
+s, s)
 
-let centerImage = (state === "garden" || state === "altar") ? btnDig : btnJump
+ctx.drawImage(btnAction,
+mobileControls.center.x - sa/2,
+mobileControls.center.y - sa/2,
+sa, sa)
 
-ctx.drawImage(centerImage,
-mobileControls.center.x - s/2,
-mobileControls.center.y - s/2,
-s,s)
-
-/* EXTRA GARDEN/ALTAR BUTTONS */
+}
 
 if(state === "garden" || state === "altar"){
 
-ctx.drawImage(btnJump,
+ctx.drawImage(btnUp,
 gardenControls.up.x - s/2,
 gardenControls.up.y - s/2,
-s,s)
+s, s)
 
-ctx.drawImage(btnJump,
+ctx.drawImage(btnDown,
 gardenControls.down.x - s/2,
 gardenControls.down.y - s/2,
-s,s)
+s, s)
 
 }
 
@@ -593,6 +594,81 @@ flowers,
 W - 20,
 35
 )
+
+/* PROGRESS BAR (below UI bar, coastal + village only) */
+
+if(state === "coastal" || state === "village"){
+
+let progress = Math.min(scroll / 5400, 1)
+let urgency = progress > 0.85
+
+// track
+let trackX = 36
+let trackW = W - 72
+let trackY = 100
+ctx.strokeStyle = urgency ? "rgba(200,30,0,0.35)" : "rgba(255,255,255,0.4)"
+ctx.lineWidth = 8
+ctx.lineCap = "round"
+ctx.beginPath()
+ctx.moveTo(trackX, trackY)
+ctx.lineTo(trackX + trackW, trackY)
+ctx.stroke()
+
+// filled portion
+ctx.strokeStyle = urgency ? "#cc2200" : "#e05cb0"
+ctx.lineWidth = 9
+ctx.beginPath()
+ctx.moveTo(trackX, trackY)
+ctx.lineTo(trackX + trackW * progress, trackY)
+ctx.stroke()
+
+// paw print dots along track
+for(let i = 1; i <= 8; i++){
+let dotX = trackX + (trackW / 9) * i
+let done = (i / 9) <= progress
+ctx.fillStyle = done ? (urgency ? "#cc2200" : "#e05cb0") : "rgba(255,255,255,0.35)"
+ctx.beginPath()
+ctx.arc(dotX, trackY, 5, 0, Math.PI*2)
+ctx.fill()
+}
+
+// finish flag at right end
+ctx.fillStyle = urgency ? "#cc2200" : "#e05cb0"
+ctx.fillRect(trackX + trackW - 1, trackY - 14, 3, 28)
+ctx.beginPath()
+ctx.moveTo(trackX + trackW + 2, trackY - 14)
+ctx.lineTo(trackX + trackW + 16, trackY - 6)
+ctx.lineTo(trackX + trackW + 2, trackY + 2)
+ctx.closePath()
+ctx.fill()
+
+// luna face sliding along
+let lunaX = trackX + trackW * progress
+let lunaY = trackY
+
+// shadow
+ctx.fillStyle = "rgba(0,0,0,0.18)"
+ctx.beginPath()
+ctx.ellipse(lunaX, lunaY + 20, 17, 6, 0, 0, Math.PI*2)
+ctx.fill()
+
+// clipped face circle
+ctx.save()
+ctx.beginPath()
+ctx.arc(lunaX, lunaY, 20, 0, Math.PI*2)
+ctx.clip()
+ctx.drawImage(lunaFace, lunaX - 20, lunaY - 20, 40, 40)
+ctx.restore()
+
+// ring around her
+ctx.strokeStyle = urgency ? "#cc2200" : "#e05cb0"
+ctx.lineWidth = 3
+ctx.beginPath()
+ctx.arc(lunaX, lunaY, 20, 0, Math.PI*2)
+ctx.stroke()
+
+}
+
 drawMobileControls()
 
 }
@@ -655,16 +731,9 @@ if(showRingPopup){
 if((keys[" "] || touchJump || touchDig) && !spacePressedLastFrame){
 
 showRingPopup = false
-state = "coastal"
-
-luna.x = 50
-luna.y = 500
-
-scroll = 0
-platformsCoastal = []
-flowersCoastal = []
-bones = []
-initCoastalPlatforms()
+state = "coastalstory"
+storyJustEntered = true
+coastalStorySpacePressedLastFrame = true
 
 }
 
@@ -1074,14 +1143,9 @@ b.x=-100
 
 /* level end */
 
-if(scroll > 4500){
-state="village"
-scroll = 0
-obstacles = []
-bonesVillage = []
-flowersVillage = []
-luna.x = 100
-luna.y = 540
+if(scroll > 5400 && fadeDir === 0){
+fadeDir = 1
+fadeTarget = "villagestory"
 }
 
 }
@@ -1332,7 +1396,7 @@ o.x-=4
 
 if(
 Math.abs(o.x - luna.x) < 35 &&
-Math.abs(o.y - luna.y) < 80 &&
+luna.y > o.y - 20 &&
 !o.hit
 ){
 energy -= 10
@@ -1353,10 +1417,9 @@ luna.y=540
 luna.vy=0
 }
 
-if(scroll > 4500){
-state="altar"
-luna.x = W/2
-luna.y = 450
+if(scroll > 5400 && fadeDir === 0){
+fadeDir = 1
+fadeTarget = "altarstory"
 }
 
 }
@@ -1736,8 +1799,122 @@ color: [
 /* GAME LOOP */
 
 function startGame(){
+state = "controls"
+controlsTimer = 300
+}
+
+function updateControls(){
+
+if(controlsTimer > 0){
+controlsTimer--
+}
+
+if(controlsTimer === 0){
+state = "gardenstory"
+storyJustEntered = true
+gardenStorySpacePressedLastFrame = true
+}
+
+}
+
+function updateGardenStory(){
+
+storyJustEntered = false
+
+if((keys[" "] || touchJump || touchDig) && !gardenStorySpacePressedLastFrame){
 state = "garden"
 generateDigSpots()
+digTimer = 0
+}
+
+gardenStorySpacePressedLastFrame = keys[" "] || touchJump || touchDig
+
+}
+
+function drawGardenStory(){
+ctx.drawImage(gardenStoryImg, 0, 0, W, H)
+}
+
+function updateCoastalStory(){
+
+storyJustEntered = false
+
+if((keys[" "] || touchJump || touchDig) && !coastalStorySpacePressedLastFrame){
+state = "coastal"
+luna.x = 50
+luna.y = 500
+scroll = 0
+platformsCoastal = []
+flowersCoastal = []
+bones = []
+initCoastalPlatforms()
+}
+
+coastalStorySpacePressedLastFrame = keys[" "] || touchJump || touchDig
+
+}
+
+function drawCoastalStory(){
+ctx.drawImage(coastalStoryImg, 0, 0, W, H)
+}
+
+function updateVillageStory(){
+
+storyJustEntered = false
+
+if((keys[" "] || touchJump || touchDig) && !villageStorySpacePressedLastFrame){
+state = "village"
+scroll = 0
+obstacles = []
+bonesVillage = []
+flowersVillage = []
+luna.x = 100
+luna.y = 540
+}
+
+villageStorySpacePressedLastFrame = keys[" "] || touchJump || touchDig
+
+}
+
+function drawVillageStory(){
+ctx.drawImage(villageStoryImg, 0, 0, W, H)
+}
+
+function updateAltarStory(){
+
+storyJustEntered = false
+
+if((keys[" "] || touchJump || touchDig) && !altarStorySpacePressedLastFrame){
+state = "altar"
+luna.x = W/2
+luna.y = 450
+}
+
+altarStorySpacePressedLastFrame = keys[" "] || touchJump || touchDig
+
+}
+
+function drawAltarStory(){
+ctx.drawImage(altarStoryImg, 0, 0, W, H)
+}
+
+function drawControls(){
+
+ctx.drawImage(controlsScreen, 0, 0, W, H)
+
+// countdown number in top right
+let seconds = Math.ceil(controlsTimer / 60)
+
+ctx.fillStyle = "rgba(0,0,0,0.45)"
+ctx.beginPath()
+ctx.arc(W - 36, 36, 24, 0, Math.PI*2)
+ctx.fill()
+
+ctx.fillStyle = "white"
+ctx.font = "bold 26px sans-serif"
+ctx.textAlign = "center"
+ctx.fillText(seconds, W - 36, 44)
+
 }
 
 function restartGame(){
@@ -1761,19 +1938,61 @@ luna.x = 200
 luna.y = 500
 luna.vx = 0
 luna.vy = 0
+fadeAlpha = 0
+fadeDir = 0
+fadeTarget = ""
 state = "garden"
 generateDigSpots()
 digTimer = 0
+}
+
+function updateFade(){
+
+if(fadeDir === 1){
+// fading out to black
+fadeAlpha += 0.04
+if(fadeAlpha >= 1){
+fadeAlpha = 1
+// switch state and start fading back in
+state = fadeTarget
+storyJustEntered = true
+if(fadeTarget === "villagestory") villageStorySpacePressedLastFrame = true
+if(fadeTarget === "altarstory") altarStorySpacePressedLastFrame = true
+fadeDir = -1
+fadeTarget = ""
+}
+} else if(fadeDir === -1){
+// fading back in
+fadeAlpha -= 0.04
+if(fadeAlpha <= 0){
+fadeAlpha = 0
+fadeDir = 0
+}
+}
+
+}
+
+function drawFade(){
+if(fadeAlpha <= 0) return
+ctx.fillStyle = "rgba(0,0,0," + fadeAlpha + ")"
+ctx.fillRect(0, 0, W, H)
 }
 
 
 
 function update(){
 
+if(state==="controls") updateControls()
+if(state==="gardenstory") updateGardenStory()
 if(state==="garden") updateGarden()
+if(state==="coastalstory") updateCoastalStory()
 if(state==="coastal") updateCoastal()
+if(state==="villagestory") updateVillageStory()
 if(state==="village") updateVillage()
+if(state==="altarstory") updateAltarStory()
 if(state==="altar") updateAltar()
+
+updateFade()
 
 if(digTimer > 0){
 digTimer--
@@ -1796,6 +2015,31 @@ drawStart()
 return
 }
 
+if(state==="controls"){
+drawControls()
+return
+}
+
+if(state==="gardenstory"){
+drawGardenStory()
+return
+}
+
+if(state==="coastalstory"){
+drawCoastalStory()
+return
+}
+
+if(state==="villagestory"){
+drawVillageStory()
+return
+}
+
+if(state==="altarstory"){
+drawAltarStory()
+return
+}
+
 if(state==="win"){
 drawWin()
 return
@@ -1811,11 +2055,55 @@ if(state==="coastal") drawCoastal()
 if(state==="village") drawVillage()
 if(state==="altar") drawAltar()
 
+drawFade()
 drawUI()
 
 }
 
+function drawLoading(){
+
+// loading screen image fills canvas
+if(loadingScreen.complete && loadingScreen.naturalWidth > 0){
+ctx.drawImage(loadingScreen, 0, 0, W, H)
+} else {
+ctx.fillStyle = "#fff0f6"
+ctx.fillRect(0, 0, W, H)
+}
+
+let progress = totalImages > 0 ? loadedCount / totalImages : 0
+
+// bar dimensions
+let barW = 260
+let barH = 22
+let barX = W/2 - barW/2
+let barY = H - 100
+let radius = barH / 2
+let pad = 4  // white gap between outline and fill
+
+// white rounded background (the "frame")
+ctx.fillStyle = "white"
+ctx.beginPath()
+ctx.roundRect(barX, barY, barW, barH, radius)
+ctx.fill()
+
+// pink fill inset by pad
+let fillW = Math.max(0, (barW - pad*2) * progress)
+if(fillW > 0){
+ctx.fillStyle = "#f19ab4"
+ctx.beginPath()
+ctx.roundRect(barX + pad, barY + pad, fillW, barH - pad*2, radius - pad)
+ctx.fill()
+}
+
+}
+
 function loop(){
+
+if(!allImagesLoaded){
+drawLoading()
+requestAnimationFrame(loop)
+return
+}
 
 update()
 draw()
@@ -1824,7 +2112,7 @@ requestAnimationFrame(loop)
 
 }
 
-loop()
+document.fonts.ready.then(() => { loop() })
 
 </script>
 
