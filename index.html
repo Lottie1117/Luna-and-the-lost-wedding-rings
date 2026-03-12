@@ -7,6 +7,14 @@
 <title>Luna and The Lost Wedding Rings</title>
 
 <style>
+
+image-rendering: pixelated;
+
+:root {
+--vh: 1vh;
+}
+
+
 @font-face {
 font-family: 'GameFont';
 src: url('Rabbits-Goody.woff2');
@@ -24,21 +32,30 @@ height: 100%;
 background: #1a1a2e;
 display: flex;
 justify-content: center;
-align-items: flex-start;
+align-items: center;
 overflow: hidden;
-font-family: sans-serif;
-color: white;
 }
+
 
 canvas {
 background: #87ceeb;
 border-radius: 12px;
 display: block;
-/* fit height to viewport so bottom controls are never cut off */
-height: 100svh;
-width: auto;
-max-width: 100vw;
+
+/* default desktop size */
+width: 420px;
+height: 700px;
+max-width: 100%;
 }
+
+@media (pointer: coarse) {
+canvas {
+width: 100vw;
+height: auto;
+max-height: 100vh;
+}
+}
+
 </style>
 
 
@@ -95,14 +112,20 @@ const sea              = loadImage("sea.png")
 const luna1            = loadImage("luna1.png")
 const luna2            = loadImage("luna2.png")
 const lunaDig          = loadImage("lunadig.png")
+const lunaWalk1        = loadImage("lunawalk1.png")
+const lunaWalk2        = loadImage("lunawalk2.png")
 const whiteflower      = loadImage("whiteflower.png")
 const purplegrass      = loadImage("purplegrass.png")
 const houseRow         = loadImage("house-row.png")
 const path             = loadImage("path.png")
 const sandpath         = loadImage("sandpath.png")
 const jonny1           = loadImage("jonny1.png")
+const jonny2           = loadImage("jonny1.png")   // placeholder — swap jonny2.png when ready
+const jonny3           = loadImage("jonny1.png")   // placeholder — swap jonny3.png when ready
 const bggrass          = loadImage("bggrass.png")
 const lottie1          = loadImage("lottie1.png")
+const lottie2          = loadImage("lottie1.png")  // placeholder — swap lottie2.png when ready
+const lottie3          = loadImage("lottie1.png")  // placeholder — swap lottie3.png when ready
 const flowerpot        = loadImage("flowerpot.png")
 const crate            = loadImage("crate.png")
 const wall             = loadImage("wall.png")
@@ -119,12 +142,33 @@ const btnDown          = loadImage("buttondown.png")
 const btnAction        = loadImage("buttonaction.png")
 const grassplatform    = loadImage("grassplatform.png")
 const doublegrassplatform = loadImage("doublegrassplatform.png")
+const arch             = loadImage("arch.png")
+const aisleTile        = loadImage("aisletile.png")
 
 const canvas = document.getElementById("game")
 const ctx = canvas.getContext("2d")
-const W = canvas.width
-const H = canvas.height
+
+ctx.imageSmoothingEnabled = false
+
+const DPR = window.devicePixelRatio || 1
+
+const W = 420
+const H = 700
+
+canvas.width = W * DPR
+canvas.height = H * DPR
+
+canvas.style.width = W + "px"
+canvas.style.height = H + "px"
+
+ctx.scale(DPR, DPR)
+
 const isMobile = "ontouchstart" in window
+
+
+const startMusic = new Audio("startscreenmusic.mp3")
+startMusic.loop = true
+startMusic.volume = 0
 
 const houses = [house1, house2, house3, house4]
 
@@ -138,6 +182,8 @@ let gardenStorySpacePressedLastFrame = false
 let coastalStorySpacePressedLastFrame = false
 let villageStorySpacePressedLastFrame = false
 let altarStorySpacePressedLastFrame = false
+let postRunnerStorySpacePressedLastFrame = false
+let postRunnerTimer = 0   // counts frames through the animated scene
 let storyJustEntered = false
 
 let confetti = []
@@ -209,6 +255,7 @@ y: 220
 let energy=100
 let hasRing=false
 let flowers=0
+let bonesEaten=0
 
 /* INPUT */
 
@@ -244,14 +291,25 @@ luna.y = 500
 
 if(e.key === "4"){
 state = "altar"
-luna.x = W/2
-luna.y = 450
+runnerLane = 1; runnerTargetLane = 1; runnerLaneX = W*0.5
+runnerProgress = 0; runnerTileOffset = 0; initRunnerFlowers()
+rhythmState = "walking"
+luna.x = W*0.5; luna.y = H - 160
 }
 
 /* START GAME (SPACE) */
 
 if(state === "start" && e.key === " "){
 startGame()
+}
+
+/* RHYTHM GAME KEYBOARD INPUT */
+
+if(RHYTHM_GAME_ENABLED && state === "altar" && rhythmState === "minigame" && !e.repeat){
+if(e.key === "ArrowLeft"  || e.key === "z" || e.key === "Z") { rhythmJustPressed[0]=true; checkRhythmInput(0); rhythmJustPressed[0]=false }
+if(e.key === "ArrowUp"   || e.key === "x" || e.key === "X") { rhythmJustPressed[1]=true; checkRhythmInput(1); rhythmJustPressed[1]=false }
+if(e.key === " " || e.key === "ArrowDown" || e.key === "," ) { rhythmJustPressed[2]=true; checkRhythmInput(2); rhythmJustPressed[2]=false }
+if(e.key === "ArrowRight" || e.key === "." || e.key === "/") { rhythmJustPressed[3]=true; checkRhythmInput(3); rhythmJustPressed[3]=false }
 }
 
 })
@@ -269,12 +327,33 @@ let rect = canvas.getBoundingClientRect()
 let x = (e.clientX - rect.left) * (canvas.width/rect.width)
 let y = (e.clientY - rect.top) * (canvas.height/rect.height)
 
-if((state === "win" || state === "gameover") &&
+if(state === "win" &&
 x > W/2-100 && x < W/2+100 &&
-y > 470 && y < 520){
+y > 400 && y < 450){
 restartGame()
 }
 
+if(state === "win" &&
+x > W/2-120 && x < W/2+120 &&
+y > 465 && y < 515){
+// confetti cannon!
+for(let i=0;i<40;i++){
+  let side = Math.random() < 0.5 ? 0 : W
+  confetti.push({ x:side, y:H*0.2+Math.random()*H*0.6, vx:(side===0?1:-1)*(Math.random()*6+3), vy:(Math.random()-0.5)*6, rot:Math.random()*Math.PI*2, rotV:(Math.random()-0.5)*0.25, isTulip:true })
+}
+}
+
+if(state === "gameover" &&
+x > W/2-100 && x < W/2+100 &&
+y > 460 && y < 510){
+restartGame()
+}
+
+if(RHYTHM_GAME_ENABLED && state === "altar" && rhythmState === "failed" &&
+x > W/2-100 && x < W/2+100 &&
+y > 380 && y < 430){
+initRhythmGame()
+}
 })
 
 canvas.addEventListener("touchmove", e => {
@@ -305,9 +384,11 @@ startGame()
 }
 
 if(state === "gardenstory" && !storyJustEntered){
+fadeOutStartMusic(()=>{
 state = "garden"
 generateDigSpots()
 digTimer = 0
+})
 }
 
 if(state === "coastalstory" && !storyJustEntered){
@@ -333,14 +414,44 @@ luna.y = 540
 
 if(state === "altarstory" && !storyJustEntered){
 state = "altar"
-luna.x = W/2
-luna.y = 450
+// initialise runner for fresh entry
+runnerLane = 1
+runnerTargetLane = 1
+runnerLaneX = W * 0.5
+runnerProgress = 0
+runnerTileOffset = 0
+initRunnerFlowers()
+runnerInputLock = false
+luna.x = W * 0.5
+luna.y = H - 160
 }
 
-if((state === "win" || state === "gameover") &&
+
+if(state === "win" &&
 x > W/2-100 && x < W/2+100 &&
-y > 470 && y < 520){
+y > 400 && y < 450){
 restartGame()
+}
+
+if(state === "win" &&
+x > W/2-120 && x < W/2+120 &&
+y > 465 && y < 515){
+for(let i=0;i<40;i++){
+  let side = Math.random() < 0.5 ? 0 : W
+  confetti.push({ x:side, y:H*0.2+Math.random()*H*0.6, vx:(side===0?1:-1)*(Math.random()*6+3), vy:(Math.random()-0.5)*6, rot:Math.random()*Math.PI*2, rotV:(Math.random()-0.5)*0.25, isTulip:true })
+}
+}
+
+if(state === "gameover" &&
+x > W/2-100 && x < W/2+100 &&
+y > 460 && y < 510){
+restartGame()
+}
+
+if(RHYTHM_GAME_ENABLED && state === "altar" && rhythmState === "failed" &&
+x > W/2-100 && x < W/2+100 &&
+y > 380 && y < 430){
+initRhythmGame()
 }
 
 /* MOBILE CONTROL BUTTONS */
@@ -361,31 +472,33 @@ showRingPopup = false
 state = "coastalstory"
 storyJustEntered = true
 coastalStorySpacePressedLastFrame = true
-} else if(state === "altar"){
-// give the rings directly if close enough
-let distance = Math.hypot(luna.x - couple.x, luna.y - couple.y)
-if(distance < 100){
-spawnConfetti()
-state = "win"
-}
+} else if(state === "altar" && rhythmState === "minigame"){
+// centre/action button = col 1 (on tap)
+if(!rhythmColHeld[1]){ rhythmJustPressed[1]=true; checkRhythmInput(1); rhythmJustPressed[1]=false; rhythmColHeld[1] = true }
 } else if(state === "garden"){
-// trigger dig directly so it isn't cleared before the game loop reads it
 if(nearDigSpot && digTimer === 0){
 digTimer = 12
 touchDigFired = true
 }
 } else {
-// trigger jump directly so it isn't cleared before the game loop reads it
 luna.vy = -8
 }
 
 }
 
-if(state === "garden" || state === "altar"){
+// rhythm game - 4 columns tapped at bottom
+if(RHYTHM_GAME_ENABLED && state === "altar" && rhythmState === "minigame"){
+for(let col = 0; col < 4; col++){
+  let cx = rhythmColX(col)
+  if(Math.abs(x - cx) < 40 && y > H - 110){
+    if(!rhythmColHeld[col]){ rhythmJustPressed[col]=true; checkRhythmInput(col); rhythmJustPressed[col]=false; rhythmColHeld[col]=true }
+  }
+}
+}
 
+if(state === "garden"){
 touchUp = hit(gardenControls.up)
 touchDown = hit(gardenControls.down)
-
 }
 
 })
@@ -398,6 +511,7 @@ touchJump = false
 touchDig = false
 touchUp = false
 touchDown = false
+rhythmColHeld = [false, false, false, false]
 
 })
 
@@ -424,13 +538,23 @@ if(state === "garden" && digTimer > 0){
 frame = lunaDig
 }
 
-/* RUNNING */
+/* WALKING UP (garden up key, or aisle runner) */
+
+else if(
+  (keys["ArrowUp"] || touchUp) ||
+  (state === "altar" && rhythmState === "walking")
+){
+let step = Math.floor(Date.now()/160) % 2
+frame = step ? lunaWalk1 : lunaWalk2
+bob = step ? -2 : 0
+}
+
+/* RUNNING LEFT/RIGHT */
 
 else if(keys["ArrowLeft"] || keys["ArrowRight"] || touchLeft || touchRight){
 let step = Math.floor(Date.now()/160) % 2
 frame = step ? luna1 : luna2
 bob = step ? -2 : 0
-
 }
 
 ctx.save()
@@ -452,6 +576,11 @@ ctx.restore()
 
 function drawStart(){
 
+if(startMusic.paused){
+startMusic.play().catch(()=>{})
+fadeInStartMusic()
+}
+
 ctx.drawImage(
 startScreen,
 0,
@@ -459,7 +588,6 @@ startScreen,
 W,
 H
 )
-
 }
 
 /* ENERGY */
@@ -483,6 +611,16 @@ let sa = mobileControls.actionSize
 
 ctx.globalAlpha = 0.7
 
+if(state === "altar" && rhythmState === "minigame"){
+  // 4 coloured tap buttons matching the 4 columns
+  for(let col = 0; col < 4; col++){
+    let cx = rhythmColX(col)
+    drawHeart(cx, H - 50, 48, HEART_COLS[col], 0.85, HEART_COLS[col])
+  }
+  ctx.globalAlpha = 1
+  return
+}
+
 if(state === "garden" || state === "coastal" || state === "village" || state === "altar"){
 
 ctx.drawImage(btnLeft,
@@ -502,7 +640,7 @@ sa, sa)
 
 }
 
-if(state === "garden" || state === "altar"){
+if(state === "garden"){
 
 ctx.drawImage(btnUp,
 gardenControls.up.x - s/2,
@@ -526,6 +664,50 @@ function drawUI(){
 if(state === "start") return
 
 
+// during rhythm minigame, show dedicated score strip instead of normal UI
+if(RHYTHM_GAME_ENABLED && state === "altar" && rhythmState === "minigame"){
+  ctx.fillStyle = "rgba(255,255,255,0.6)"
+  ctx.fillRect(0, 0, W, 56)
+
+  // song label
+  ctx.fillStyle = "#b03070"
+  ctx.font = "bold 13px 'GameFont', sans-serif"
+  ctx.textAlign = "center"
+  ctx.fillText("♪ Here Comes the Bride! ♪", W/2, 16)
+
+  // score hearts (hits) — left side
+  let heartSize = 13
+  let spacing = 17
+  let startX = 12
+  ctx.font = "10px 'GameFont', sans-serif"
+  ctx.fillStyle = "#b03070"
+  ctx.textAlign = "left"
+  ctx.fillText("hits", startX, 30)
+  for(let i = 0; i < rhythmTotal; i++){
+    let hx = startX + i * spacing
+    drawHeart(hx + 6, 46, heartSize, i < rhythmScore ? "#e05cb0" : "rgba(0,0,0,0.12)", 1, null)
+  }
+
+  // miss skulls — right side
+  let missX = W - 12
+  ctx.textAlign = "right"
+  ctx.fillStyle = rhythmMissCount >= 4 ? "#cc2200" : "#888"
+  ctx.font = "10px 'GameFont', sans-serif"
+  ctx.fillText("misses", missX, 30)
+  for(let i = 0; i < 6; i++){
+    let hx = missX - i * spacing
+    let missed = i < rhythmMissCount
+    ctx.globalAlpha = missed ? 1 : 0.2
+    ctx.fillStyle = missed ? "#cc2200" : "#888"
+    ctx.font = "14px sans-serif"
+    ctx.textAlign = "right"
+    ctx.fillText("💔", hx, 50)
+  }
+  ctx.globalAlpha = 1
+
+  drawMobileControls()
+  return
+}
 
 /* UI BACKGROUND STRIP */
 
@@ -597,9 +779,9 @@ W - 20,
 
 /* PROGRESS BAR (below UI bar, coastal + village only) */
 
-if(state === "coastal" || state === "village"){
+if(state === "coastal" || state === "village" || (state === "altar" && rhythmState === "walking")){
 
-let progress = Math.min(scroll / 5400, 1)
+let progress = (state === "altar") ? runnerProgress : Math.min(scroll / 5400, 1)
 let urgency = progress > 0.85
 
 // track
@@ -1135,7 +1317,8 @@ bones.forEach(b=>{
 b.x-=3
 
 if(Math.abs(b.x-luna.x)<20 && Math.abs(b.y-luna.y)<25){
-energy=Math.min(100,energy+35)
+energy=Math.min(100,energy+30)
+bonesEaten++
 b.x=-100
 }
 
@@ -1384,6 +1567,7 @@ b.x -= 4
 if(Math.abs(b.x-luna.x)<25 && Math.abs(b.y-luna.y)<40){
 
 energy = Math.min(100, energy + 30)
+bonesEaten++
 b.x = -100
 
 }
@@ -1627,63 +1811,776 @@ drawLuna()
 
 /* ALTAR */
 
+/* --- Here Comes the Bride (Wagner) - transcribed from sheet music ---
+   Key of Bb major, 4/4 time, Allegro
+   beat unit = 1 quarter note at 160BPM = 22.5 frames
+   dur: note duration in beats (affects how long tone rings)
+   col: visual column 0=left(green) 1=centre(pink) 2=right(blue)
+*/
+
+const RHYTHM_FALL_SPEED = 4.2
+const RHYTHM_HIT_Y = 600
+const RHYTHM_HIT_WINDOW = 54
+
+const NF = {
+  Eb4: 311.1,
+  F4:  349.2,
+  G4:  392.0,
+  A4:  440.0,
+  Bb4: 466.2,
+  C5:  523.3,
+  D5:  587.3,
+  Eb5: 622.3,
+  F5:  698.5,
+}
+
+// beat positions matching the score (quarter note = 1 beat)
+const noteChart = [
+  // BAR 1 — Bb(dotted) Bb(8th) Bb(half) — the classic lilt
+  {beat:2,    col:0, freq:NF.Bb4, dur:0, soundDur:2},
+  {beat:3.5,  col:2, freq:NF.Bb4, dur:0, soundDur:1},
+  {beat:4,    col:1, freq:NF.Bb4, dur:1.5},
+
+  // BAR 2 — repeat
+  {beat:6,    col:3, freq:NF.Bb4, dur:0, soundDur:2},
+  {beat:7.5,  col:1, freq:NF.Bb4, dur:0, soundDur:1},
+  {beat:8,    col:2, freq:NF.Bb4, dur:1.5},
+
+  // BAR 3 — Bb. Bb D C Bb. A
+  {beat:10,   col:0, freq:NF.Bb4, dur:0,   soundDur:2},
+  {beat:11.5, col:3, freq:NF.Bb4, dur:0,   soundDur:1},
+  {beat:12,   col:2, freq:NF.D5,  dur:0.5, soundDur:1},
+  {beat:13,   col:1, freq:NF.C5,  dur:0.5, soundDur:1},
+  {beat:14,   col:0, freq:NF.Bb4, dur:0,   soundDur:2},
+  {beat:15.5, col:3, freq:NF.A4,  dur:0,   soundDur:1},
+
+  // BAR 4 — G F. G Bb(half)
+  {beat:16,   col:2, freq:NF.G4,  dur:0.5, soundDur:1},
+  {beat:17,   col:1, freq:NF.F4,  dur:0,   soundDur:2},
+  {beat:18.5, col:3, freq:NF.G4,  dur:0,   soundDur:1},
+  {beat:19,   col:2, freq:NF.Bb4, dur:1.5},
+
+  // BAR 5 (repeat bar 1)
+  {beat:22,   col:0, freq:NF.Bb4, dur:0, soundDur:2},
+  {beat:23.5, col:2, freq:NF.Bb4, dur:0, soundDur:1},
+  {beat:24,   col:1, freq:NF.Bb4, dur:1.5},
+
+  // BAR 6 (repeat bar 2)
+  {beat:26,   col:3, freq:NF.Bb4, dur:0, soundDur:2},
+  {beat:27.5, col:1, freq:NF.Bb4, dur:0, soundDur:1},
+  {beat:28,   col:2, freq:NF.Bb4, dur:1.5},
+
+  // BAR 7 — Bb. Bb Eb5 D5 C5. Bb
+  {beat:30,   col:0, freq:NF.Bb4, dur:0,   soundDur:2},
+  {beat:31.5, col:3, freq:NF.Bb4, dur:0,   soundDur:1},
+  {beat:32,   col:2, freq:NF.Eb5, dur:0.5, soundDur:1},
+  {beat:33,   col:1, freq:NF.D5,  dur:0.5, soundDur:1},
+  {beat:34,   col:0, freq:NF.C5,  dur:0,   soundDur:2},
+  {beat:35.5, col:3, freq:NF.Bb4, dur:0,   soundDur:1},
+
+  // BAR 8 — F Eb4. F Bb(whole)  (Eb4 not Eb5!)
+  {beat:36,   col:2, freq:NF.F4,  dur:0.5, soundDur:1},
+  {beat:37,   col:1, freq:NF.Eb4, dur:0,   soundDur:2},
+  {beat:38.5, col:3, freq:NF.F4,  dur:0,   soundDur:1},
+  {beat:39,   col:1, freq:NF.Bb4, dur:4  },
+]
+
+
+const NOTE_FREQS = [NF.F4, NF.Bb4, NF.D5]
+
+let rhythmState = "walking"
+
+// --- AISLE RUNNER STATE ---
+// carpet: pew 15% | stone 5% | carpet 60% | stone 5% | pew 15%
+// lanes sit within carpet: left=33%, mid=50%, right=67% of canvas
+const AISLE_LANE_XS = [W*0.333, W*0.5, W*0.667]  // 3 lanes inside carpet
+const AISLE_SCROLL_SPEED = 4          // px per frame tile scrolls
+const AISLE_DURATION = 1800           // frames to run full aisle (30 seconds at 60fps)
+
+// Set to true to re-enable the rhythm mini-game after the runner phase
+const RHYTHM_GAME_ENABLED = false
+const AISLE_FLOWER_INTERVAL = 45      // frames between flower rows
+
+function spawnFlowerRow(startY){
+  let lanes = [0, 1, 2].sort(() => Math.random() - 0.5)
+  // block triple rows if cooldown is active
+  let canTriple = tripleRowCooldown <= 0
+  let count = Math.random() < 0.35 ? 1 : (canTriple && Math.random() < 0.18) ? 3 : 2
+  if(count === 3) tripleRowCooldown = AISLE_FLOWER_INTERVAL * 8  // ~6 rows gap minimum
+  let witheredSlot = Math.random() < 0.15 ? Math.floor(Math.random() * count) : -1
+  for(let i = 0; i < count; i++){
+    runnerFlowers.push({
+      lane: lanes[i],
+      x: AISLE_LANE_XS[lanes[i]],
+      y: startY,
+      withered: i === witheredSlot
+    })
+  }
+}
+
+function initRunnerFlowers(){
+  runnerFlowers = []
+  runnerFlowerTimer = 0
+  tripleRowCooldown = 0
+  // pre-fill rows that are already on-screen or just above it
+  // space them AISLE_FLOWER_INTERVAL * AISLE_SCROLL_SPEED px apart
+  let rowSpacing = AISLE_FLOWER_INTERVAL * AISLE_SCROLL_SPEED
+  let numPreRows = Math.ceil(H / rowSpacing) + 1
+  for(let i = 0; i < numPreRows; i++){
+    // start from just above screen top, spread upward
+    spawnFlowerRow(-30 - i * rowSpacing)
+  }
+}
+let runnerLane = 1                    // current lane (0=left,1=mid,2=right)
+let runnerTargetLane = 1
+let runnerLaneX = W*0.5              // smooth lerped x
+let runnerProgress = 0               // 0→1 over AISLE_DURATION frames
+let runnerTileOffset = 0             // scrolling tile Y offset
+let runnerFlowers = []               // {lane, y} collectible flowers
+let runnerFlowerTimer = 0
+let tripleRowCooldown = 0   // frames to wait before a 3-lane row can appear again
+let runnerInputLock = false          // prevents holding key for instant lane changes
+let rhythmTimer = 0
+let rhythmNotes = []
+let rhythmHits = []
+let rhythmScore = 0
+let rhythmTotal = noteChart.length
+let rhythmFinishTimer = 0
+let rhythmMissCount = 0
+let rhythmAccuracyTotal = 0  // sum of accuracy bonuses (0-10 per note)
+let rhythmWarmupTimer = 0
+let rhythmColHeld = [false, false, false, false]
+let rhythmJustPressed = [false, false, false, false]
+
+const RHYTHM_BPM = 120
+const RHYTHM_BEAT_FRAMES = 60 / RHYTHM_BPM * 60  // frames per beat at 60fps
+
+function initRhythmGame(){
+  rhythmState = "warmup"
+  rhythmWarmupTimer = 0
+  rhythmTimer = 0
+  rhythmScore = 0
+  rhythmFinishTimer = 0
+  rhythmMissCount = 0
+  rhythmAccuracyTotal = 0
+  rhythmColHeld = [false, false, false, false]
+  rhythmJustPressed = [false, false, false, false]
+  // pre-warm AudioContext so first note isn't delayed
+  try {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)()
+    // play a silent buffer to unlock audio on iOS
+    let buf = audioCtx.createBuffer(1, 1, 22050)
+    let src = audioCtx.createBufferSource()
+    src.buffer = buf
+    src.connect(audioCtx.destination)
+    src.start(0)
+  } catch(e){}
+
+  let travelFrames = (RHYTHM_HIT_Y + 40) / RHYTHM_FALL_SPEED
+  const GAP_PX = 120  // visual gap between tail of one note and head of next
+  rhythmNotes = noteChart.map((n,i) => {
+    let holdPixels = Math.max(0, n.dur * RHYTHM_BEAT_FRAMES * RHYTHM_FALL_SPEED - GAP_PX)
+    // each note starts at a Y position based on how far in the future it is from beat 0
+    // so notes are pre-staggered visually from the first frame
+    let beatsUntilHit = n.beat  // beats from game start until note reaches hit zone
+    let startY = RHYTHM_HIT_Y - beatsUntilHit * RHYTHM_BEAT_FRAMES * RHYTHM_FALL_SPEED
+    return {
+      col: n.col,
+      freq: n.freq,
+      dur: n.dur,
+      soundDur: n.soundDur || null,
+      y: startY,
+      tailY: startY - holdPixels,
+      holdPixels: holdPixels,
+      spawnFrame: 0,  // all spawn immediately, already positioned correctly
+      spawned: true,  // pre-spawned at correct position
+      hit: false,
+      holding: false,
+      released: false,
+      missed: false,
+      id: i
+    }
+  })
+  rhythmHits = []
+}
+
+function playNote(freq, dur){
+  try {
+    if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)()
+    // minimum 1.5s ring regardless of dur, so notes overlap naturally like a sustain pedal
+    let secs = Math.max(1.5, (dur / RHYTHM_BPM) * 60 * 1.4)
+    let now = audioCtx.currentTime
+
+    const partials = [
+      { ratio: 1,    gain: 0.5,  decay: secs * 1.0  },
+      { ratio: 2,    gain: 0.25, decay: secs * 0.6  },
+      { ratio: 3,    gain: 0.15, decay: secs * 0.4  },
+      { ratio: 4,    gain: 0.08, decay: secs * 0.25 },
+      { ratio: 5,    gain: 0.04, decay: secs * 0.15 },
+    ]
+
+    const master = audioCtx.createGain()
+    master.gain.setValueAtTime(0.001, now)
+    master.gain.linearRampToValueAtTime(0.35, now + 0.008)
+    master.connect(audioCtx.destination)
+
+    partials.forEach(p => {
+      let osc = audioCtx.createOscillator()
+      let g = audioCtx.createGain()
+      osc.type = 'sine'
+      osc.frequency.value = freq * p.ratio
+      g.gain.setValueAtTime(p.gain, now)
+      g.gain.exponentialRampToValueAtTime(0.0001, now + p.decay)
+      osc.connect(g)
+      g.connect(master)
+      osc.start(now)
+      osc.stop(now + p.decay + 0.05)
+    })
+  } catch(e){}
+}
+
+function checkRhythmInput(col){
+  let best = null
+  let bestDist = 9999
+  rhythmNotes.forEach(n => {
+    if(n.col === col && n.spawned && !n.hit && !n.holding && !n.missed){
+      let dist = Math.abs((n.y + RHYTHM_FALL_SPEED*2) - RHYTHM_HIT_Y)
+if(dist < bestDist){ bestDist = dist; best = n }
+    }
+  })
+  if(best && bestDist < RHYTHM_HIT_WINDOW){
+    // accuracy bonus: 10 points for perfect, scales down to 1 at edge of window
+    let accuracy = Math.round(10 * (1 - bestDist / RHYTHM_HIT_WINDOW))
+    rhythmAccuracyTotal += accuracy
+    if(best.holdPixels > 0){
+      best.holding = true
+      playNote(best.freq, best.dur)
+      rhythmScore++
+      rhythmHits.push({x: rhythmColX(col), y: RHYTHM_HIT_Y, type:"hit", life:40, col:col})
+    } else {
+      best.hit = true
+      rhythmScore++
+      playNote(best.freq, best.soundDur || best.dur || 1)
+      rhythmHits.push({x: rhythmColX(col), y: RHYTHM_HIT_Y, type:"hit", life:40, col:col})
+    }
+  }
+}
+
+function rhythmColX(col){
+  return [W*0.2, W*0.4, W*0.6, W*0.8][col]
+}
+
+const HEART_COLS = ["#82a40d","#f098b6","#abbbf7","#f9c74f"]
+
 function updateAltar(){
 
-if(keys["ArrowLeft"] || touchLeft) luna.x -= 3
-if(keys["ArrowRight"] || touchRight) luna.x += 3
-if(keys["ArrowUp"] || touchUp) luna.y -= 3
-if(keys["ArrowDown"] || touchDown) luna.y += 3
+// ── RUNNER PHASE ──────────────────────────────────────────────────────────
+if(rhythmState === "walking"){
 
-/* check if Luna reached the couple */
+  // lane switching — left/right, with input lock so tap = one lane at a time
+  let wantLeft  = keys["ArrowLeft"]  || touchLeft
+  let wantRight = keys["ArrowRight"] || touchRight
 
-let distance = Math.hypot(
-luna.x - couple.x,
-luna.y - couple.y
-)
+  if(!runnerInputLock){
+    if(wantLeft && runnerTargetLane > 0){
+      runnerTargetLane--
+      runnerInputLock = true
+    } else if(wantRight && runnerTargetLane < 2){
+      runnerTargetLane++
+      runnerInputLock = true
+    }
+  }
+  // release lock when no key held
+  if(!wantLeft && !wantRight) runnerInputLock = false
 
-if(distance < 100 && keys[" "]){
-spawnConfetti()
-state = "win"
+  // smooth lerp Luna to target lane
+  let targetX = AISLE_LANE_XS[runnerTargetLane]
+  runnerLaneX += (targetX - runnerLaneX) * 0.18
+  luna.x = runnerLaneX
+  luna.y = H - 160
+  luna.dir = runnerTargetLane < runnerLane ? -1 : 1
+  runnerLane = runnerTargetLane
+
+  // advance progress
+  runnerProgress = Math.min(1, runnerProgress + 1 / AISLE_DURATION)
+
+  // scroll tiles
+  runnerTileOffset = (runnerTileOffset + AISLE_SCROLL_SPEED) % H
+
+  // spawn flowers randomly in lanes
+  runnerFlowerTimer++
+  if(tripleRowCooldown > 0) tripleRowCooldown--
+  if(runnerFlowerTimer >= AISLE_FLOWER_INTERVAL){
+    runnerFlowerTimer = 0
+    spawnFlowerRow(-30)
+  }
+
+  // move flowers down and collect
+  runnerFlowers.forEach(f => {
+    f.y += AISLE_SCROLL_SPEED
+    f.x = AISLE_LANE_XS[f.lane]
+  })
+
+  // collect/hit: luna touches any flower in her lane near her Y
+  runnerFlowers = runnerFlowers.filter(f => {
+    if(f.lane === runnerLane && Math.abs(f.y - luna.y) < 45){
+      if(f.withered){
+        // withered flower — deduct one flower, brown droopy dust
+        flowers = Math.max(0, flowers - 1)
+        for(let i=0;i<8;i++){
+          dust.push({ x:luna.x, y:luna.y-20, vx:(Math.random()-0.5)*4, vy:-Math.random()*2, life:25 })
+        }
+      } else {
+        // healthy tulip — add flower, pink sparkle
+        flowers++
+        for(let i=0;i<6;i++){
+          dust.push({ x:luna.x, y:luna.y-20, vx:(Math.random()-0.5)*3, vy:-Math.random()*3-1, life:20 })
+        }
+      }
+      return false
+    }
+    return f.y < H + 40
+  })
+
+  // when progress reaches 1, cut to post-runner story scene
+  if(runnerProgress >= 1){
+    postRunnerStorySpacePressedLastFrame = true
+    storyJustEntered = true
+    postRunnerTimer = 0
+    state = "postrunnerstory"
+  }
 }
 
+// ── RHYTHM PHASE ──────────────────────────────────────────────────────────
+if(RHYTHM_GAME_ENABLED){
+
+if(rhythmState === "warmup"){
+  rhythmWarmupTimer++
+  if(rhythmWarmupTimer >= 90){
+    rhythmState = "minigame"
+  }
 }
 
+if(rhythmState === "minigame"){
+  rhythmTimer++
+
+  let heldCols = [
+    keys["ArrowLeft"]  || keys["z"] || keys["Z"] || touchLeft,
+    keys["ArrowUp"]    || keys["x"] || keys["X"],
+    keys[" "] || keys["ArrowDown"] || keys[","],
+    keys["ArrowRight"] || keys["."] || keys["/"] || touchRight
+  ]
+  if(isMobile) heldCols[1] = heldCols[1] || touchDig
+
+  rhythmNotes.forEach(n => {
+    if(!n.spawned) return
+    if(!n.released && !n.missed){
+      n.y    += RHYTHM_FALL_SPEED
+      n.tailY += RHYTHM_FALL_SPEED
+    }
+    if(!n.hit && !n.holding && !n.missed && n.y > RHYTHM_HIT_Y + RHYTHM_HIT_WINDOW * 1.5){
+      n.missed = true
+      rhythmMissCount++
+      rhythmHits.push({x: rhythmColX(n.col), y: RHYTHM_HIT_Y, type:"miss", life:30, col:n.col})
+      if(rhythmMissCount >= 6){ rhythmState = "failed" }
+    }
+    if(n.holding && !n.released){
+      if(!heldCols[n.col]){ n.released = true; n.hit = true }
+      if(n.tailY >= RHYTHM_HIT_Y - RHYTHM_HIT_WINDOW){
+        n.released = true; n.hit = true
+        rhythmHits.push({x: rhythmColX(n.col), y: RHYTHM_HIT_Y, type:"hit", life:40, col:n.col})
+      }
+    }
+  })
+
+  rhythmHits.forEach(h => h.life--)
+  rhythmHits = rhythmHits.filter(h => h.life > 0)
+
+  let allDone = rhythmNotes.every(n => n.hit || n.missed)
+  if(allDone){
+    rhythmFinishTimer++
+    if(rhythmFinishTimer > 60){
+      rhythmState = "done"
+      spawnConfetti()
+      state = "win"
+    }
+  }
+}
+
+} // end RHYTHM_GAME_ENABLED
+
+}
+
+function drawHeart(x, y, size, color, alpha, glowColor){
+  ctx.save()
+  ctx.globalAlpha = alpha
+  if(glowColor){
+    ctx.shadowColor = glowColor
+    ctx.shadowBlur = 18
+  }
+  ctx.fillStyle = color
+  ctx.strokeStyle = "white"
+  ctx.lineWidth = 3
+  ctx.beginPath()
+  let s = size / 2
+  ctx.moveTo(x, y + s * 0.3)
+  ctx.bezierCurveTo(x, y - s * 0.5, x - s, y - s * 0.5, x - s, y)
+  ctx.bezierCurveTo(x - s, y + s * 0.5, x, y + s * 0.9, x, y + s * 0.9)
+  ctx.bezierCurveTo(x, y + s * 0.9, x + s, y + s * 0.5, x + s, y)
+  ctx.bezierCurveTo(x + s, y - s * 0.5, x, y - s * 0.5, x, y + s * 0.3)
+  ctx.closePath()
+  ctx.fill()
+  ctx.stroke()
+  ctx.restore()
+}
 
 function drawAltar(){
 
-ctx.fillStyle="#ffe4e1"
-ctx.fillRect(0,0,W,H)
+// ── RHYTHM FAIL SCREEN ────────────────────────────────────────────────────
+if(RHYTHM_GAME_ENABLED && rhythmState === "failed"){
+  ctx.fillStyle = "#1a1a2e"
+  ctx.fillRect(0, 0, W, H)
+  ctx.textAlign = "center"
+  ctx.fillStyle = "#ff6b6b"
+  ctx.font = "bold 26px 'GameFont', sans-serif"
+  ctx.fillText("Oh no! 💔", W/2, 220)
+  ctx.fillStyle = "white"
+  ctx.font = "16px 'GameFont', sans-serif"
+  ctx.fillText("Luna dropped the rings!", W/2, 270)
+  ctx.fillText("Too many notes missed...", W/2, 300)
+  ctx.font = "13px 'GameFont', sans-serif"
+  ctx.fillStyle = "#aaa"
+  ctx.fillText("flowers & bones kept 🌷🦴", W/2, 340)
+  ctx.fillStyle = "#e05cb0"
+  ctx.beginPath()
+  ctx.roundRect(W/2-100, 380, 200, 50, 25)
+  ctx.fill()
+  ctx.fillStyle = "white"
+  ctx.font = "bold 16px 'GameFont', sans-serif"
+  ctx.fillText("Try again 🎵", W/2, 411)
+  return
+}
 
-ctx.fillStyle="#8b0000"
-ctx.fillRect(W/2-40,0,80,H)
+// ── AISLE RUNNER ─────────────────────────────────────────────────────────
+if(rhythmState === "walking"){
 
-ctx.drawImage(
-jonny1,
-couple.x - 70,
-couple.y - 60,
-120,
-160
-)
+  // --- BACKGROUND ---
+  ctx.fillStyle = "#f5ede0"
+  ctx.fillRect(0, 0, W, H)
 
-ctx.drawImage(
-lottie1,
-couple.x + 10,
-couple.y - 60,
-120,
-160
-)
+  // --- SCROLLING AISLE ---
+  if(aisleTile.complete && aisleTile.naturalWidth > 0){
+    let tileH = aisleTile.naturalHeight
+    let numTiles = Math.ceil(H / tileH) + 2
+    for(let i = 0; i < numTiles; i++){
+      let ty = (runnerTileOffset % tileH) - tileH + i * tileH
+      ctx.drawImage(aisleTile, 0, ty, W, tileH)
+    }
+  } else {
+    // Programmatic aisle:
+    // Layout (left→right):  pew(15%) | stone(10%) | carpet(50%) | stone(10%) | pew(15%)
+    const PEW_W   = W * 0.15
+    const STONE_W = W * 0.05
+    const CARPET_X = PEW_W + STONE_W          // = W*0.20
+    const CARPET_W = W * 0.60
+    const ROW_H = 100   // height of one pew row tile
 
-ctx.fillStyle="white"
-ctx.font="18px sans-serif"
-ctx.textAlign="center"
+    let numRows = Math.ceil(H / ROW_H) + 2
 
-ctx.fillText(
-isMobile ? "Tap the centre button to hand over the rings!" : "Press SPACE to hand over the rings!",
-W/2,
-500
-)
+    // draw static stone floor first (full height, won't scroll)
+    ctx.fillStyle = "#b8a898"
+    ctx.fillRect(PEW_W, 0, STONE_W, H)           // left stone
+    ctx.fillRect(PEW_W + STONE_W + CARPET_W, 0, STONE_W, H)  // right stone
 
-drawLuna()
+    // stone tile grid lines (static — gives texture without scrolling)
+    ctx.strokeStyle = "rgba(90,70,60,0.18)"
+    ctx.lineWidth = 1
+    let stoneGridH = 40
+    let stoneGridW = STONE_W / 2
+    for(let col = 0; col < 2; col++){
+      let sx = PEW_W + col * stoneGridW
+      for(let row = 0; row < Math.ceil(H/stoneGridH)+1; row++){
+        let sy = (runnerTileOffset % stoneGridH) - stoneGridH + row * stoneGridH
+        ctx.strokeRect(sx + 1, sy + 1, stoneGridW - 2, stoneGridH - 2)
+      }
+    }
+    for(let col = 0; col < 2; col++){
+      let sx = CARPET_X + CARPET_W + col * stoneGridW
+      for(let row = 0; row < Math.ceil(H/stoneGridH)+1; row++){
+        let sy = (runnerTileOffset % stoneGridH) - stoneGridH + row * stoneGridH
+        ctx.strokeRect(sx + 1, sy + 1, stoneGridW - 2, stoneGridH - 2)
+      }
+    }
+
+    // scrolling pew rows
+    for(let i = 0; i < numRows; i++){
+      let ty = (runnerTileOffset % ROW_H) - ROW_H + i * ROW_H
+
+      // left pew body
+      ctx.fillStyle = "#c8a97a"
+      ctx.fillRect(0, ty + 4, PEW_W - 2, ROW_H - 10)
+      // left pew end cap (dark edge at bottom of each pew)
+      ctx.fillStyle = "#8b6430"
+      ctx.fillRect(0, ty + ROW_H - 10, PEW_W - 2, 8)
+      // left pew inner edge shadow
+      ctx.fillStyle = "rgba(0,0,0,0.12)"
+      ctx.fillRect(PEW_W - 4, ty + 4, 4, ROW_H - 10)
+
+      // right pew body (mirror)
+      ctx.fillStyle = "#c8a97a"
+      ctx.fillRect(W - PEW_W + 2, ty + 4, PEW_W - 2, ROW_H - 10)
+      ctx.fillStyle = "#8b6430"
+      ctx.fillRect(W - PEW_W + 2, ty + ROW_H - 10, PEW_W - 2, 8)
+      ctx.fillStyle = "rgba(0,0,0,0.12)"
+      ctx.fillRect(W - PEW_W + 2, ty + 4, 4, ROW_H - 10)
+
+      // occasional flowers at pew ends — programmatic placeholder
+      let rowIndex = i + Math.floor(runnerTileOffset / ROW_H)
+      if(rowIndex % 3 === 0){
+        // left pew end flower
+        let fx = PEW_W - 4, fy = ty + ROW_H - 22
+        ctx.save()
+        // stem
+        ctx.strokeStyle = "#4a7a30"; ctx.lineWidth = 2
+        ctx.beginPath(); ctx.moveTo(fx, fy); ctx.lineTo(fx, fy - 18); ctx.stroke()
+        // petals
+        for(let p = 0; p < 5; p++){
+          let angle = (p / 5) * Math.PI * 2
+          ctx.fillStyle = p % 2 === 0 ? "#f098b6" : "#f9c74f"
+          ctx.beginPath()
+          ctx.ellipse(fx + Math.cos(angle)*5, fy - 18 + Math.sin(angle)*5, 4, 3, angle, 0, Math.PI*2)
+          ctx.fill()
+        }
+        // centre
+        ctx.fillStyle = "#fff176"
+        ctx.beginPath(); ctx.arc(fx, fy - 18, 3, 0, Math.PI*2); ctx.fill()
+        ctx.restore()
+      }
+      if(rowIndex % 3 === 1){
+        // right pew end flower
+        let fx = W - PEW_W + 4, fy = ty + ROW_H - 22
+        ctx.save()
+        ctx.strokeStyle = "#4a7a30"; ctx.lineWidth = 2
+        ctx.beginPath(); ctx.moveTo(fx, fy); ctx.lineTo(fx, fy - 18); ctx.stroke()
+        for(let p = 0; p < 5; p++){
+          let angle = (p / 5) * Math.PI * 2
+          ctx.fillStyle = p % 2 === 0 ? "#abbbf7" : "#f9c74f"
+          ctx.beginPath()
+          ctx.ellipse(fx + Math.cos(angle)*5, fy - 18 + Math.sin(angle)*5, 4, 3, angle, 0, Math.PI*2)
+          ctx.fill()
+        }
+        ctx.fillStyle = "#fff176"
+        ctx.beginPath(); ctx.arc(fx, fy - 18, 3, 0, Math.PI*2); ctx.fill()
+        ctx.restore()
+      }
+    }
+
+    // carpet (drawn on top so pew/stone layers are behind it)
+    ctx.fillStyle = "#8b0000"
+    ctx.fillRect(CARPET_X, 0, CARPET_W, H)
+
+    // carpet seam lines (scroll with tiles)
+    let numSeams = Math.ceil(H / ROW_H) + 2
+    for(let i = 0; i < numSeams; i++){
+      let ty = (runnerTileOffset % ROW_H) - ROW_H + i * ROW_H
+      ctx.strokeStyle = "rgba(60,0,0,0.35)"
+      ctx.lineWidth = 1.5
+      ctx.beginPath(); ctx.moveTo(CARPET_X, ty); ctx.lineTo(CARPET_X + CARPET_W, ty); ctx.stroke()
+    }
+
+    // gold trim edges on carpet
+    ctx.fillStyle = "#d4a017"
+    ctx.fillRect(CARPET_X, 0, 4, H)
+    ctx.fillRect(CARPET_X + CARPET_W - 4, 0, 4, H)
+  }
+
+  // --- FLOWERS (tulips) + WITHERED FLOWER OBSTACLES ---
+  runnerFlowers.forEach(f => {
+    if(!f.withered){
+      ctx.drawImage(tulip, f.x - 28, f.y - 35, 56, 70)
+    } else {
+      // programmatic withered flower placeholder — droopy, desaturated, brown/grey
+      ctx.save()
+      ctx.translate(f.x, f.y)
+
+      // drooping stem (curved, bent over)
+      ctx.strokeStyle = "#7a6040"
+      ctx.lineWidth = 3
+      ctx.lineCap = "round"
+      ctx.beginPath()
+      ctx.moveTo(0, 20)
+      ctx.bezierCurveTo(0, -5, 18, -18, 22, -34)
+      ctx.stroke()
+
+      // wilted petals (drooping downward, dull colours)
+      const wiltedCols = ["#9e8a6a","#b09070","#8a7a5a","#a08060","#927860"]
+      for(let p = 0; p < 5; p++){
+        let angle = (p / 5) * Math.PI * 2 + 0.3
+        // petals droop down rather than radiate outward
+        let px = 22 + Math.cos(angle) * 9
+        let py = -34 + 6 + Math.sin(angle) * 7 + 5  // shifted down for droop
+        ctx.fillStyle = wiltedCols[p]
+        ctx.globalAlpha = 0.85
+        ctx.beginPath()
+        ctx.ellipse(px, py, 5, 3, angle + 0.8, 0, Math.PI*2)
+        ctx.fill()
+      }
+
+      // withered centre — small, dull brown
+      ctx.globalAlpha = 1
+      ctx.fillStyle = "#6b4f2a"
+      ctx.beginPath()
+      ctx.arc(22, -34, 4, 0, Math.PI*2)
+      ctx.fill()
+
+      // small ❌ badge so it's obvious it's bad
+      ctx.fillStyle = "#cc2200"
+      ctx.font = "bold 14px sans-serif"
+      ctx.textAlign = "center"
+      ctx.fillText("✕", 6, -42)
+
+      ctx.restore()
+    }
+  })
+
+  // --- LUNA running animation (walk-toward-camera frames) ---
+  let bob = Math.floor(Date.now() / 120) % 2 === 0 ? -3 : 0
+  let runFrame = Math.floor(Date.now() / 160) % 2 === 0 ? lunaWalk1 : lunaWalk2
+  ctx.save()
+  ctx.translate(luna.x, luna.y + bob)
+  ctx.scale(luna.dir, 1)
+  ctx.drawImage(runFrame, -50, -65, 100, 100)
+  ctx.restore()
+
+  return
+}
+
+// ── WARMUP SCREEN ─────────────────────────────────────────────────────────
+if(RHYTHM_GAME_ENABLED && rhythmState === "warmup"){
+  ctx.drawImage(loadingScreen, 0, 0, W, H)
+  let dots = Math.floor(rhythmWarmupTimer / 22) + 1
+  ctx.fillStyle = "white"
+  ctx.font = "22px 'GameFont', sans-serif"
+  ctx.textAlign = "center"
+  ctx.fillText("Get ready" + ".".repeat(Math.min(dots, 3)), W/2, H/2 + 20)
+  let progress = rhythmWarmupTimer / 90
+  let barW = 200, barH = 18, barX = W/2 - 100, barY = H/2 + 60, pad = 4, r = barH/2
+  ctx.fillStyle = "white"
+  ctx.beginPath(); ctx.roundRect(barX, barY, barW, barH, r); ctx.fill()
+  let fillW = Math.max(0, (barW - pad*2) * progress)
+  if(fillW > 0){
+    ctx.fillStyle = "#f19ab4"
+    ctx.beginPath(); ctx.roundRect(barX+pad, barY+pad, fillW, barH-pad*2, r-pad); ctx.fill()
+  }
+  return
+}
+
+// ── RHYTHM MINI GAME ──────────────────────────────────────────────────────
+
+ctx.fillStyle = "#1a0a2e"
+ctx.fillRect(0, 0, W, H)
+
+let aisleGrad = ctx.createLinearGradient(W/2 - 80, 0, W/2 + 80, 0)
+aisleGrad.addColorStop(0, "rgba(255,220,240,0)")
+aisleGrad.addColorStop(0.5, "rgba(255,220,240,0.08)")
+aisleGrad.addColorStop(1, "rgba(255,220,240,0)")
+ctx.fillStyle = aisleGrad
+ctx.fillRect(0, 0, W, H)
+
+ctx.fillStyle = "white"
+ctx.font = "20px 'GameFont', sans-serif"
+ctx.textAlign = "center"
+ctx.fillText("🎵 Here Comes the Bride! 🎵", W/2, 50)
+
+ctx.font = "15px 'GameFont', sans-serif"
+ctx.fillStyle = "#f098b6"
+ctx.fillText(rhythmScore + " / " + rhythmTotal, W/2, 78)
+
+for(let col = 0; col < 4; col++){
+  let cx = rhythmColX(col)
+  ctx.strokeStyle = "rgba(255,255,255,0.06)"
+  ctx.lineWidth = 80
+  ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, H); ctx.stroke()
+}
+
+for(let col = 0; col < 4; col++){
+  drawHeart(rhythmColX(col), RHYTHM_HIT_Y, 36, HEART_COLS[col], 0.35, null)
+}
+
+rhythmNotes.forEach(n => {
+  if(!n.spawned) return
+  if((n.hit && n.released) || n.missed) return
+  if(n.y < -80) return
+
+  let cx = rhythmColX(n.col)
+  let color = HEART_COLS[n.col]
+  let isHolding = n.holding && !n.released
+  let headSize = 36, tailSize = 26
+
+  if(n.holdPixels > 20){
+    let lineTop = Math.max(n.tailY, 90)
+    let lineBot = Math.min(n.y, RHYTHM_HIT_Y + 20)
+    if(lineBot > lineTop){
+      ctx.save()
+      let grad = ctx.createLinearGradient(cx, lineBot, cx, lineTop)
+      grad.addColorStop(0, color); grad.addColorStop(0.7, color); grad.addColorStop(1, "rgba(0,0,0,0)")
+      ctx.strokeStyle = grad; ctx.lineWidth = 14; ctx.lineCap = "round"
+      ctx.globalAlpha = isHolding ? 1 : 0.85
+      ctx.shadowColor = color; ctx.shadowBlur = 8
+      ctx.beginPath(); ctx.moveTo(cx, lineTop); ctx.lineTo(cx, lineBot); ctx.stroke()
+      let gradW = ctx.createLinearGradient(cx, lineBot, cx, lineTop)
+      gradW.addColorStop(0, "rgba(255,255,255,0.35)"); gradW.addColorStop(0.7, "rgba(255,255,255,0.2)"); gradW.addColorStop(1, "rgba(255,255,255,0)")
+      ctx.strokeStyle = gradW; ctx.lineWidth = 5; ctx.shadowBlur = 0
+      ctx.beginPath(); ctx.moveTo(cx, lineTop); ctx.lineTo(cx, lineBot); ctx.stroke()
+      ctx.restore()
+    }
+    if(n.tailY > 90 && n.tailY < H) drawHeart(cx, n.tailY, tailSize, color, isHolding ? 1 : 0.7, color)
+    if(!n.holding){
+      let scale = 0.85 + (n.y / RHYTHM_HIT_Y) * 0.25
+      drawHeart(cx, n.y, headSize * scale, color, 1, color)
+    } else {
+      let pulse = 0.8 + 0.2 * Math.sin(rhythmTimer * 0.3)
+      drawHeart(cx, RHYTHM_HIT_Y, headSize, color, pulse, color)
+    }
+  } else {
+    drawHeart(cx, n.y, headSize, color, 1, color)
+  }
+})
+
+rhythmHits.forEach(h => {
+  let frac = h.life / (h.type === "hit" ? 40 : 30)
+  if(h.type === "hit"){
+    ctx.save()
+    ctx.globalAlpha = frac * 0.9
+    ctx.strokeStyle = HEART_COLS[h.col]; ctx.shadowColor = HEART_COLS[h.col]; ctx.shadowBlur = 20; ctx.lineWidth = 3
+    let r = 28 + (1 - frac) * 30
+    ctx.beginPath(); ctx.arc(h.x, h.y, r, 0, Math.PI*2); ctx.stroke()
+    ctx.restore()
+    for(let i = 0; i < 6; i++){
+      let angle = (i/6)*Math.PI*2 + (1-frac)*3
+      let dist = 20 + (1-frac)*25
+      ctx.save(); ctx.globalAlpha = frac
+      ctx.fillStyle = HEART_COLS[h.col]; ctx.shadowColor = HEART_COLS[h.col]; ctx.shadowBlur = 8
+      ctx.beginPath(); ctx.arc(h.x+Math.cos(angle)*dist, h.y+Math.sin(angle)*dist, 3, 0, Math.PI*2); ctx.fill()
+      ctx.restore()
+    }
+    drawHeart(h.x, h.y, 44+(1-frac)*16, HEART_COLS[h.col], frac*0.8, HEART_COLS[h.col])
+  } else {
+    drawHeart(h.x, h.y, 44, "#ff3333", frac * 0.85)
+  }
+})
+
+ctx.strokeStyle = "rgba(255,255,255,0.2)"; ctx.lineWidth = 1.5
+ctx.setLineDash([6,6])
+ctx.beginPath(); ctx.moveTo(W/2-120, RHYTHM_HIT_Y); ctx.lineTo(W/2+120, RHYTHM_HIT_Y); ctx.stroke()
+ctx.setLineDash([])
+
+let allDone = rhythmNotes.every(n => n.hit || n.missed)
+if(allDone && rhythmFinishTimer > 0){
+  ctx.fillStyle = "white"; ctx.font = "22px 'GameFont', sans-serif"; ctx.textAlign = "center"
+  let msg = rhythmScore === rhythmTotal ? "Perfect! 💍" : rhythmScore > rhythmTotal * 0.6 ? "Beautiful! 💍" : "The rings are delivered! 💍"
+  ctx.fillText(msg, W/2, H/2)
+}
 
 }
 
@@ -1694,40 +2591,60 @@ function drawWin(){
 ctx.fillStyle="#fff9f0"
 ctx.fillRect(0,0,W,H)
 
+// tulip confetti
 confetti.forEach(c=>{
-c.x += c.vx
-c.y += c.vy
-c.vy += 0.1
-ctx.fillStyle = c.color
-ctx.fillRect(c.x, c.y, c.size, c.size)
+  c.x += c.vx
+  c.y += c.vy
+  c.vy += 0.08
+  if(c.isTulip){
+    c.rot += c.rotV
+    ctx.save()
+    ctx.translate(c.x, c.y)
+    ctx.rotate(c.rot)
+    ctx.drawImage(tulip, -10, -13, 20, 26)
+    ctx.restore()
+  }
 })
 
 ctx.fillStyle="#333"
 ctx.textAlign="center"
-ctx.font="28px sans-serif"
-ctx.fillText("Congratulations Jonny & Lottie!",W/2,260)
+ctx.font="28px 'GameFont', sans-serif"
+ctx.fillText("Congratulations Jonny & Lottie!",W/2,200)
 
-ctx.font="18px sans-serif"
-ctx.fillText("Luna delivered the rings!",W/2,300)
+ctx.font="16px 'GameFont', sans-serif"
+ctx.fillText("Luna delivered the rings! 💍",W/2,240)
 
-ctx.font="16px sans-serif"
-ctx.fillText("🌷 Flowers collected: " + flowers, W/2, 350)
-ctx.fillText("⚡ Energy remaining: " + Math.round(energy) + "%", W/2, 380)
+let exploringScore = flowers * 10 + Math.round(energy) + bonesEaten * 5
+let totalScore = exploringScore
 
-let score = flowers * 10 + Math.round(energy)
-ctx.font="bold 22px sans-serif"
+ctx.font="14px 'GameFont', sans-serif"
+ctx.fillStyle="#555"
+let ly = 285
+ctx.fillText("🌷 Flowers collected: " + flowers + "  ×10 = " + (flowers*10) + " pts", W/2, ly)
+ctx.fillText("⚡ Energy remaining: " + Math.round(energy) + "% = " + Math.round(energy) + " pts", W/2, ly+24)
+ctx.fillText("🦴 Gravy bones eaten: " + bonesEaten + "  ×5 = " + (bonesEaten*5) + " pts", W/2, ly+48)
+
+ctx.font="bold 22px 'GameFont', sans-serif"
 ctx.fillStyle="#e05cb0"
-ctx.fillText("Total score: " + score, W/2, 430)
+ctx.fillText("Total score: " + totalScore, W/2, ly+90)
 
-// restart button
+// play again button
 ctx.fillStyle="#e05cb0"
 ctx.beginPath()
-ctx.roundRect(W/2-100, 470, 200, 50, 25)
+ctx.roundRect(W/2-100, ly+115, 200, 50, 25)
 ctx.fill()
-
 ctx.fillStyle="white"
-ctx.font="bold 18px sans-serif"
-ctx.fillText("Play again 🐾", W/2, 501)
+ctx.font="bold 16px 'GameFont', sans-serif"
+ctx.fillText("Play again 🐾", W/2, ly+146)
+
+// confetti cannon button
+ctx.fillStyle="#f9c74f"
+ctx.beginPath()
+ctx.roundRect(W/2-120, ly+180, 240, 50, 25)
+ctx.fill()
+ctx.fillStyle="#333"
+ctx.font="bold 14px 'GameFont', sans-serif"
+ctx.fillText("🎉 super secret confetti cannon 🎉", W/2, ly+211)
 
 }
 
@@ -1794,7 +2711,36 @@ color: [
 }
 
 }
+function fadeInStartMusic(){
 
+let fade = setInterval(()=>{
+
+if(startMusic.volume < 0.5){
+startMusic.volume += 0.02
+}else{
+clearInterval(fade)
+}
+
+}, 60)
+
+}
+
+function fadeOutStartMusic(callback){
+
+let fade = setInterval(()=>{
+
+if(startMusic.volume > 0.02){
+startMusic.volume -= 0.02
+}else{
+clearInterval(fade)
+startMusic.pause()
+startMusic.currentTime = 0
+if(callback) callback()
+}
+
+}, 40)
+
+}
 
 /* GAME LOOP */
 
@@ -1886,8 +2832,10 @@ storyJustEntered = false
 
 if((keys[" "] || touchJump || touchDig) && !altarStorySpacePressedLastFrame){
 state = "altar"
-luna.x = W/2
-luna.y = 450
+// initialise runner on entry from story
+runnerLane = 1; runnerTargetLane = 1; runnerLaneX = W*0.5
+runnerProgress = 0; runnerTileOffset = 0; initRunnerFlowers()
+luna.x = W * 0.5; luna.y = H - 160
 }
 
 altarStorySpacePressedLastFrame = keys[" "] || touchJump || touchDig
@@ -1896,6 +2844,159 @@ altarStorySpacePressedLastFrame = keys[" "] || touchJump || touchDig
 
 function drawAltarStory(){
 ctx.drawImage(altarStoryImg, 0, 0, W, H)
+}
+
+function updatePostRunnerStory(){
+  storyJustEntered = false
+  postRunnerTimer++
+
+  // Scene timeline (frames at 60fps):
+  // 0–90   Luna walks toward couple
+  // 90–150 Ring box flies from Luna to couple
+  // 150–330 Couple + Luna celebrate
+  // 330–390 Confetti bursts from sides
+  // 390+   Confetti rains, then auto-transition to win at 480
+
+  // Tulip confetti bursts from both sides starting at frame 330
+  if(postRunnerTimer >= 330 && postRunnerTimer < 420){
+    if(postRunnerTimer % 4 === 0){
+      // left side burst
+      for(let i=0;i<4;i++){
+        confetti.push({ x:0, y:H*0.3+Math.random()*H*0.4, vx:Math.random()*5+2, vy:(Math.random()-0.5)*5, rot:Math.random()*Math.PI*2, rotV:(Math.random()-0.5)*0.2, isTulip:true })
+      }
+      // right side burst
+      for(let i=0;i<4;i++){
+        confetti.push({ x:W, y:H*0.3+Math.random()*H*0.4, vx:-(Math.random()*5+2), vy:(Math.random()-0.5)*5, rot:Math.random()*Math.PI*2, rotV:(Math.random()-0.5)*0.2, isTulip:true })
+      }
+    }
+  }
+
+  // tick confetti physics
+  confetti.forEach(c => {
+    c.x += c.vx; c.y += c.vy; c.vy += 0.08
+    if(c.isTulip) c.rot += c.rotV
+  })
+
+  // auto-transition to win
+  if(postRunnerTimer >= 480){
+    // seed win screen with a burst of tulip confetti
+    for(let i=0;i<60;i++){
+      let side = i < 30 ? 0 : W
+      confetti.push({ x:side, y:H*0.1+Math.random()*H*0.5, vx:(side===0?1:-1)*(Math.random()*5+2), vy:(Math.random()-0.6)*5, rot:Math.random()*Math.PI*2, rotV:(Math.random()-0.5)*0.2, isTulip:true })
+    }
+    state = "win"
+  }
+}
+
+function drawPostRunnerStory(){
+  // ── BACKGROUND — same altar setup ──
+  ctx.fillStyle = "#ffe4e1"
+  ctx.fillRect(0, 0, W, H)
+
+  // aisle carpet strip
+  ctx.fillStyle = "#8b0000"
+  ctx.fillRect(W/2 - 40, 56, 80, H - 56)
+
+  // arch at top
+  ctx.drawImage(arch, W/2 - 190, 20, 380, 240)
+
+  // ── SCENE PHASES ──
+  const WALK_END    = 90    // luna arrives
+  const RING_END    = 150   // ring reaches couple
+  const CELEB_START = 150
+  const CONFETTI_START = 330
+
+  // --- COUPLE ---
+  // position couple under arch
+  let cx = W/2, cy = 200
+  let coupleFrame
+  if(postRunnerTimer < CELEB_START){
+    coupleFrame = [jonny1, lottie1]
+  } else {
+    // 3-frame jump cycle at ~8fps
+    let celebFrame = Math.floor(postRunnerTimer / 8) % 3
+    let jonnyFrames = [jonny1, jonny2, jonny3]
+    let lottieFrames = [lottie1, lottie2, lottie3]
+    // jump bob — hop up on frame 1
+    let jumpY = celebFrame === 1 ? -18 : celebFrame === 0 ? -8 : 0
+    ctx.drawImage(jonnyFrames[celebFrame], cx - 100, cy - 60 + jumpY, 100, 140)
+    ctx.drawImage(lottieFrames[celebFrame], cx + 10,  cy - 60 + jumpY, 100, 140)
+    coupleFrame = null
+  }
+  if(coupleFrame){
+    ctx.drawImage(coupleFrame[0], cx - 100, cy - 60, 100, 140)
+    ctx.drawImage(coupleFrame[1], cx + 10,  cy - 60, 100, 140)
+  }
+
+  // --- RING BOX ---
+  // flies from Luna's position toward couple between frames 90-150
+  if(postRunnerTimer >= WALK_END){
+    let ringT = Math.min(1, (postRunnerTimer - WALK_END) / (RING_END - WALK_END))
+    // ease out
+    ringT = 1 - Math.pow(1 - ringT, 3)
+    let lunaStartX = W/2, lunaStartY = H - 180
+    let ringX = lunaStartX + (cx - lunaStartX) * ringT
+    let ringY = lunaStartY + (cy - lunaStartY) * ringT - Math.sin(ringT * Math.PI) * 80
+    let ringScale = 0.6 + ringT * 0.4
+    ctx.save()
+    ctx.translate(ringX, ringY)
+    ctx.scale(ringScale, ringScale)
+    ctx.drawImage(ringbox, -18, -18, 36, 36)
+    ctx.restore()
+  }
+
+  // --- LUNA ---
+  let lunaY = H - 160
+  let lunaX, lunaDir
+
+  if(postRunnerTimer < WALK_END){
+    // walk toward couple — start from bottom, move up
+    let t = postRunnerTimer / WALK_END
+    lunaX = W/2
+    lunaY = H - 120 - t * (H - 120 - 340)
+    lunaDir = 1
+    // walk animation
+    let walkStep = Math.floor(Date.now() / 160) % 2
+    let walkFrame = walkStep ? lunaWalk1 : lunaWalk2
+    let bob = walkStep ? -3 : 0
+    ctx.save()
+    ctx.translate(lunaX, lunaY + bob)
+    ctx.scale(lunaDir, 1)
+    ctx.drawImage(walkFrame, -50, -65, 100, 100)
+    ctx.restore()
+  } else if(postRunnerTimer < CELEB_START){
+    // arrived — face right toward couple
+    lunaX = W/2
+    lunaY = 340   // walk end position (t=1 of walk phase)
+    lunaDir = 1
+    ctx.save()
+    ctx.translate(lunaX, lunaY)
+    ctx.scale(lunaDir, 1)
+    ctx.drawImage(luna1, -50, -65, 100, 100)
+    ctx.restore()
+  } else {
+    // celebrate — 3-frame dance, just use luna1 as placeholder for all 3
+    lunaX = W/2 - 10
+    lunaY = 340
+    let danceFrames = [luna1, luna1, luna1]  // swap for dance sprites when ready
+    let df = Math.floor(postRunnerTimer / 10) % 3
+    let danceY = df === 1 ? -12 : df === 0 ? -5 : 0
+    ctx.save()
+    ctx.translate(lunaX, lunaY + danceY)
+    ctx.scale(1, 1)
+    ctx.drawImage(danceFrames[df], -50, -65, 100, 100)
+    ctx.restore()
+  }
+
+  // --- TULIP CONFETTI ---
+  confetti.forEach(c => {
+    if(!c.isTulip) return
+    ctx.save()
+    ctx.translate(c.x, c.y)
+    ctx.rotate(c.rot)
+    ctx.drawImage(tulip, -10, -13, 20, 26)
+    ctx.restore()
+  })
 }
 
 function drawControls(){
@@ -1920,12 +3021,14 @@ ctx.fillText(seconds, W - 36, 44)
 function restartGame(){
 energy = 100
 flowers = 0
+bonesEaten = 0
 hasRing = false
 showRingPopup = false
 ringAnimTimer = 0
 ringAnimSpot = null
 popupFadeTimer = 0
 confetti = []
+postRunnerTimer = 0
 dust = []
 scroll = 0
 platformsCoastal = []
@@ -1941,6 +3044,24 @@ luna.vy = 0
 fadeAlpha = 0
 fadeDir = 0
 fadeTarget = ""
+rhythmState = "walking"
+rhythmTimer = 0
+rhythmWarmupTimer = 0
+rhythmColHeld = [false, false, false, false]
+rhythmNotes = []
+rhythmHits = []
+rhythmScore = 0
+rhythmFinishTimer = 0
+rhythmMissCount = 0
+rhythmAccuracyTotal = 0
+// reset runner
+runnerLane = 1
+runnerTargetLane = 1
+runnerLaneX = W * 0.5
+runnerProgress = 0
+runnerTileOffset = 0
+initRunnerFlowers()
+runnerInputLock = false
 state = "garden"
 generateDigSpots()
 digTimer = 0
@@ -1990,6 +3111,7 @@ if(state==="coastal") updateCoastal()
 if(state==="villagestory") updateVillageStory()
 if(state==="village") updateVillage()
 if(state==="altarstory") updateAltarStory()
+if(state==="postrunnerstory") updatePostRunnerStory()
 if(state==="altar") updateAltar()
 
 updateFade()
@@ -2040,6 +3162,11 @@ drawAltarStory()
 return
 }
 
+if(state==="postrunnerstory"){
+drawPostRunnerStory()
+return
+}
+
 if(state==="win"){
 drawWin()
 return
@@ -2056,8 +3183,15 @@ if(state==="village") drawVillage()
 if(state==="altar") drawAltar()
 
 drawFade()
-drawUI()
 
+if(
+state === "garden" ||
+state === "coastal" ||
+state === "village" ||
+(state === "altar" && rhythmState !== "failed")
+){
+drawUI()
+}
 }
 
 function drawLoading(){
