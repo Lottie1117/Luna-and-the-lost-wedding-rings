@@ -158,6 +158,9 @@ const houses = [house1, house2, house3, house4]
 let grassplatform = new Image()
 grassplatform.src = "grassplatform.png"
 
+const doublegrassplatform = new Image()
+doublegrassplatform.src = "doublegrassplatform.png"
+
 let dust = []
 
 let meadowFlowers=[]
@@ -167,6 +170,9 @@ let state = "start"
 let confetti = []
 
 let showRingPopup = false
+let ringAnimTimer = 0
+let ringAnimSpot = null
+let popupFadeTimer = 0
 
 let spacePressedLastFrame = false
 
@@ -245,6 +251,11 @@ if(e.key === "2"){
 state = "coastal"
 luna.x = 50
 luna.y = 500
+scroll = 0
+platformsCoastal = []
+flowersCoastal = []
+bones = []
+initCoastalPlatforms()
 }
 
 if(e.key === "3"){
@@ -342,6 +353,11 @@ showRingPopup = false
 state = "coastal"
 luna.x = 50
 luna.y = 500
+scroll = 0
+platformsCoastal = []
+flowersCoastal = []
+bones = []
+initCoastalPlatforms()
 } else if(state === "altar"){
 // give the rings directly if close enough
 let distance = Math.hypot(luna.x - couple.x, luna.y - couple.y)
@@ -357,7 +373,7 @@ touchDigFired = true
 }
 } else {
 // trigger jump directly so it isn't cleared before the game loop reads it
-luna.vy = -10
+luna.vy = -8
 }
 
 }
@@ -522,9 +538,9 @@ if(hasRing){
 ctx.drawImage(
 ringbox,
 20,
-15,
-40,
-40
+12,
+36,
+36
 )
 
 }
@@ -644,6 +660,12 @@ state = "coastal"
 luna.x = 50
 luna.y = 500
 
+scroll = 0
+platformsCoastal = []
+flowersCoastal = []
+bones = []
+initCoastalPlatforms()
+
 }
 
 spacePressedLastFrame = keys[" "] || touchJump || touchDig
@@ -662,8 +684,24 @@ luna.x -= 3
 luna.dir = - 1
 }
 
-if(keys[" "] || touchUp) luna.y-=3
-if(keys["ArrowDown"]  || touchDown) luna.y+=3
+if(keys["ArrowUp"] || touchUp) luna.y-=3
+if(keys["ArrowDown"] || touchDown) luna.y+=3
+
+if(ringAnimTimer > 0){
+ringAnimTimer--
+if(ringAnimTimer === 0){
+popupFadeTimer = 30
+}
+return
+}
+
+if(popupFadeTimer > 0){
+popupFadeTimer--
+if(popupFadeTimer === 0){
+showRingPopup = true
+}
+return
+}
 
 digSpots.forEach((s,i)=>{
 
@@ -684,10 +722,8 @@ flowers++
 if(i===ringSpot){
 
 hasRing = true
-showRingPopup = true
-
-
-// reset space tracking so popup doesn't instantly close
+ringAnimTimer = 120  // ~2 second animation
+ringAnimSpot = s
 spacePressedLastFrame = true
 
 }
@@ -737,8 +773,8 @@ if(s.dug){
 
 ctx.drawImage(
 dughole,
-s.x-32,
-s.y-32,
+s.x-16,
+s.y-16,
 64,
 64
 )
@@ -747,36 +783,58 @@ s.y-32,
 
 })   // ← THIS closes the forEach loop
 
-// popup
-if(showRingPopup){
+// final resting position matches popup ringbox exactly
+const ringFinalX = W/2 - 40
+const ringFinalY = H/2 - 70
+const ringFinalSize = 80
 
-ctx.fillStyle="white"
+// ring pop animation - floats up from hole to final position
+if((ringAnimTimer > 0 || popupFadeTimer > 0 || showRingPopup) && ringAnimSpot){
+
+// during anim: progress 0->1. after anim: stays at 1
+let progress = ringAnimTimer > 0 ? 1 - (ringAnimTimer / 120) : 1
+
+// easing - ease out so it slows as it arrives
+let ease = 1 - Math.pow(1 - progress, 3)
+
+let startSize = 20
+let size = startSize + ease * (ringFinalSize - startSize)
+
+let startX = ringAnimSpot.x - startSize/2
+let startY = ringAnimSpot.y - startSize/2
+
+let x = startX + ease * (ringFinalX - startX)
+let y = startY + ease * (ringFinalY - startY)
+
+// popup fading in behind the ring
+if(popupFadeTimer > 0 || showRingPopup){
+let fadeProgress = popupFadeTimer > 0 ? 1 - (popupFadeTimer / 30) : 1
+ctx.globalAlpha = fadeProgress
+ctx.fillStyle = "white"
 ctx.beginPath()
-ctx.roundRect(W/2-200,H/2-100,400,200,20)
+ctx.roundRect(W/2-200, H/2-100, 400, 200, 20)
 ctx.fill()
+ctx.globalAlpha = 1
+}
 
-// ring image
-ctx.drawImage(
-ringbox,
-W/2-40,
-H/2-70,
-80,
-80
-)
+// draw ring at animated or final position
+ctx.drawImage(ringbox, x, y, size, size)
 
-// text
-ctx.fillStyle="#333"
-ctx.font="20px sans-serif"
-ctx.textAlign="center"
-
-ctx.fillText("Yay you found the rings!",W/2,H/2+30)
-ctx.fillText("Let's go to the venue!",W/2,H/2+60)
-
+// text appears only once fully faded in
+if(showRingPopup){
+ctx.fillStyle = "#333"
+ctx.font = "20px sans-serif"
+ctx.textAlign = "center"
+ctx.fillText("Yay you found the rings!", W/2, H/2+30)
+ctx.fillText("Let's make our way to the venue!", W/2, H/2+60)
+}
 
 }
 
-
+// hide Luna during animation and popup
+if(!showRingPopup && ringAnimTimer === 0 && popupFadeTimer === 0){
 drawLuna()
+}
 
 }
 
@@ -788,72 +846,108 @@ let flowersCoastal=[]
 let platformsCoastal=[]
 let scroll=0
 
+function noOverlap(x, w){
+// returns true if this x position is clear of all existing platforms
+return !platformsCoastal.some(p =>
+x < p.x + p.w + 60 && x + w > p.x - 60
+)
+}
+
 function spawnPlatformCluster(){
 
 let last = platformsCoastal[platformsCoastal.length-1]
+if(last && last.x > W) return
 
-if(last && last.x > W - 250) return
+// three distinct height tiers
+let lowTier   = [460, 440, 480]
+let highTier  = [320, 350, 370, 390]
+let skyTier   = [270, 290, 310]
 
-let startX = W + 120
-let baseY = 260 + Math.random()*80
+let count = 1 + Math.floor(Math.random()*4)
+let startX = W + 80
+let lastTier = "low"
 
-let count = 2 + Math.floor(Math.random()*2)
+for(let i=0; i<count; i++){
 
-for(let i=0;i<count;i++){
+let width = Math.random() < 0.4 ? 192 :
+            Math.random() < 0.5 ? 96 : 128
 
-let width = Math.random() < 0.35 ? 192 : 96
-
-let p = {
-x: startX + i*110,
-y: baseY - i*40 + Math.random()*20,
-w: width
+// tier selection - sky only reachable from high, so sequence sensibly
+let tier
+let r = Math.random()
+if(lastTier === "high" && r < 0.3){
+tier = skyTier
+lastTier = "sky"
+} else if(lastTier === "sky"){
+// always step back down after sky
+tier = highTier
+lastTier = "high"
+} else if(r < 0.4){
+tier = highTier
+lastTier = "high"
+} else {
+tier = lowTier
+lastTier = "low"
 }
 
+let nextY = tier[Math.floor(Math.random()*tier.length)]
+
+// skip if this x overlaps an existing platform
+if(!noOverlap(startX, width)){
+startX += width + 120
+continue
+}
+
+let p = { x: startX, y: nextY, w: width }
 platformsCoastal.push(p)
 
-if(Math.random() < 0.7){
+// flower and bone at different x positions so they never stack
+let hasFlower = Math.random() < 0.6
+let hasBone   = Math.random() < 0.35
+
+if(hasFlower){
 flowersCoastal.push({
-x: p.x + p.w/2,
-y: p.y - 40
+x: p.x + p.w * 0.25,
+y: p.y - 55
 })
 }
 
-if(Math.random() < 0.4){
+if(hasBone){
 bones.push({
-x: p.x + p.w/3,
-y: p.y - 40
+x: p.x + p.w * (hasFlower ? 0.7 : 0.5),
+y: p.y - 55
 })
 }
 
+startX += width + 80 + Math.floor(Math.random()*80)
+
 }
 
-/* occasional low rest platform */
-
-if(Math.random() < 0.35){
-
-let p = {
-x: W + 120,
-y: 420,
-w: 160
 }
 
+function initCoastalPlatforms(){
+
+platformsCoastal = []
+flowersCoastal = []
+bones = []
+
+// hand-crafted first few platforms across both tiers
+let starts = [
+{ x: 200, y: 460, w: 128 },
+{ x: 380, y: 370, w: 96  },
+{ x: 530, y: 450, w: 192 },
+{ x: 780, y: 340, w: 128 },
+{ x: 960, y: 280, w: 96  },
+{ x: 1110, y: 460, w: 128 },
+]
+
+starts.forEach((p, i) => {
 platformsCoastal.push(p)
-
-if(Math.random() < 0.5){
-flowersCoastal.push({
-x: p.x + p.w/2,
-y: p.y - 40
+flowersCoastal.push({ x: p.x + p.w * 0.25, y: p.y - 55 })
+if(i % 2 === 0){
+bones.push({ x: p.x + p.w * 0.7, y: p.y - 55 })
+}
 })
-}
-
-if(Math.random() < 0.4){
-bones.push({
-x: p.x + p.w/3,
-y: p.y - 40
-})
-}
-
-}
 
 }
 
@@ -898,17 +992,17 @@ life: 20
 /* jump */
 
 if(keys[" "] || touchJump && luna.vy==0){
-luna.vy=-11
+luna.vy=-8
 }
 
 /* gravity */
 
-luna.vy+=0.5
+luna.vy+=0.6
 luna.y+=luna.vy
 
-platformsCoastal = platformsCoastal.filter(p => p.x > -120)
-flowersCoastal = flowersCoastal.filter(f => f.x > -120)
-bones = bones.filter(b => b.x > -120)
+platformsCoastal = platformsCoastal.filter(p => p.x + p.w > -20)
+flowersCoastal = flowersCoastal.filter(f => f.x > -20)
+bones = bones.filter(b => b.x > -20)
 
 
 /* platform collision */
@@ -918,8 +1012,8 @@ let onPlatform=false
 platformsCoastal.forEach(p=>{
 
 if(
-luna.x > p.x - 40 &&
-luna.x < p.x + 96 + 40 &&
+luna.x > p.x - 20 &&
+luna.x < p.x + p.w + 20 &&
 luna.y > p.y - 20 &&
 luna.y < p.y + 20 &&
 luna.vy >= 0
@@ -944,7 +1038,7 @@ scroll+=3
 
 /* spawn platforms */
 
-if(Math.random()<0.01) spawnPlatformCluster()
+if(Math.random()<0.03) spawnPlatformCluster()
 
 /* move platforms */
 
@@ -1017,21 +1111,6 @@ x,
 
 }
 
-/* FLOATING PLATFORMS */
-
-platformsCoastal.forEach(p=>{
-
-ctx.drawImage(
-grassplatform,
-p.x,
-p.y,
-96,
-96
-)
-
-})
-
-
 /* GROUND FLOWER GRASS */
 
 /* PURPLE GRASS (TOP ROW) */
@@ -1078,6 +1157,25 @@ x,
 
 }
 
+/* FLOATING PLATFORMS (drawn after ground so they appear on top) */
+
+platformsCoastal.forEach(p=>{
+
+if(p.w >= 192){
+// use double tile image for wide platforms
+ctx.drawImage(doublegrassplatform, p.x, p.y, 192, 96)
+// if wider than 2 tiles, continue with single tiles
+for(let tx = 192; tx < p.w; tx += 96){
+ctx.drawImage(grassplatform, p.x + tx, p.y, 96, 96)
+}
+} else {
+for(let tx = 0; tx < p.w; tx += 96){
+ctx.drawImage(grassplatform, p.x + tx, p.y, 96, 96)
+}
+}
+
+})
+
 
 /* FLOWERS */
 
@@ -1108,10 +1206,6 @@ b.y-16,
 
 })
 
-
-/* LUNA */
-
-drawLuna()
 
 /* LUNA */
 
@@ -1651,6 +1745,9 @@ energy = 100
 flowers = 0
 hasRing = false
 showRingPopup = false
+ringAnimTimer = 0
+ringAnimSpot = null
+popupFadeTimer = 0
 confetti = []
 dust = []
 scroll = 0
