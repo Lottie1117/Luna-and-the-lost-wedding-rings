@@ -16,8 +16,13 @@ image-rendering: pixelated;
 
 
 @font-face {
-font-family: 'GameFont';
+font-family: 'DeliusSwash';
 src: url('Rabbits-Goody.woff2');
+}
+
+@font-face {
+font-family: 'DeliusSwash';
+src: url('DeliusSwashCaps-Regular.ttf');
 }
 
 *, *::before, *::after {
@@ -107,6 +112,7 @@ const dughole          = loadImage("dughole.png")
 const flowergrass      = loadImage("flowergrass.png")
 const ringbox          = loadImage("ringbox.png")
 const tulip            = loadImage("tulip.png")
+const witheredTulip    = loadImage("witheredtulip.png")
 const gravybone        = loadImage("gravybone.png")
 const sea              = loadImage("sea.png")
 const luna1            = loadImage("luna1.png")
@@ -114,6 +120,12 @@ const luna2            = loadImage("luna2.png")
 const lunaDig          = loadImage("lunadig.png")
 const lunaWalk1        = loadImage("lunawalk1.png")
 const lunaWalk2        = loadImage("lunawalk2.png")
+const lunaFrontWalk1   = loadImage("lunafrontwalk1.png")
+const lunaFrontWalk2   = loadImage("lunafrontwalk2.png")
+const lunaJump1        = loadImage("lunajump1.png")
+const lunaJump2        = loadImage("lunajump2.png")
+const lunaDown1        = loadImage("lunadown1.png")
+const lunaDown2        = loadImage("lunadown2.png")
 const whiteflower      = loadImage("whiteflower.png")
 const purplegrass      = loadImage("purplegrass.png")
 const houseRow         = loadImage("house-row.png")
@@ -154,6 +166,7 @@ const DPR = window.devicePixelRatio || 1
 
 const W = 420
 const H = 700
+const UI_H = 68           // height of the solid UI bar at the top
 
 canvas.width = W * DPR
 canvas.height = H * DPR
@@ -207,6 +220,9 @@ let fadeTarget = ""   // state to switch to when fade out completes
 let touchLeft = false
 let touchRight = false
 let touchJump = false
+let jumpHeld = false          // true while jump button is physically held
+let landTimer = 0             // frames to show lunaDown2 after landing
+const LAND_FRAMES = 10        // how long lunaDown2 shows on landing
 let touchDig = false
 let touchDigFired = false
 let tapToContinue = false
@@ -214,17 +230,21 @@ let tapToContinue = false
 let touchUp = false
 let touchDown = false
 
-const mobileControls = {
-size: 56,
-actionSize: 72,
-left:   {x: W/2 - 74, y: H - 80},
-center: {x: W/2,      y: H - 80},
-right:  {x: W/2 + 74, y: H - 80}
+const joystick = {
+x: 105,          // fixed centre X
+y: H - 100,      // fixed centre Y
+outerR: 46,      // outer ring radius
+innerR: 22,      // nub radius
+deadZone: 10,    // ignore tiny movements
+nubX: 105,       // current nub draw position
+nubY: H - 100,
+active: false
 }
 
-const gardenControls = {
-up:   {x: W/2, y: H - 154},
-down: {x: W/2, y: H - 6}
+const actionButton = {
+x: W - 90,
+y: H - 100,
+r: 36
 }
 
 const startButton = {
@@ -304,6 +324,8 @@ if(state === "start" && e.key === " "){
 startGame()
 }
 
+if((state === "coastal" || state === "village") && e.key === " ") jumpHeld = true
+
 /* RHYTHM GAME KEYBOARD INPUT */
 
 if(RHYTHM_GAME_ENABLED && state === "altar" && rhythmState === "minigame" && !e.repeat){
@@ -317,6 +339,7 @@ if(e.key === "ArrowRight" || e.key === "." || e.key === "/") { rhythmJustPressed
 
 window.addEventListener("keyup", e => {
 keys[e.key] = false
+if(e.key === " ") jumpHeld = false
 })
 
 
@@ -359,6 +382,44 @@ initRhythmGame()
 
 canvas.addEventListener("touchmove", e => {
 e.preventDefault()
+
+let rect = canvas.getBoundingClientRect()
+
+touchLeft  = false
+touchRight = false
+touchUp    = false
+touchDown  = false
+
+for(let i = 0; i < e.touches.length; i++){
+  let t = e.touches[i]
+  let tx = (t.clientX - rect.left) * (W / rect.width)
+  let ty = (t.clientY - rect.top)  * (H / rect.height)
+
+  if(tx < W / 2 && ty > H / 2){
+    let dx = tx - joystick.x
+    let dy = ty - joystick.y
+    let dist = Math.sqrt(dx*dx + dy*dy)
+    let clamped = Math.min(dist, joystick.outerR)
+    let angle = Math.atan2(dy, dx)
+    joystick.nubX = joystick.x + Math.cos(angle) * clamped
+    joystick.nubY = joystick.y + Math.sin(angle) * clamped
+    if(dist > joystick.deadZone){
+      // dominant axis wins — prevents diagonal movement
+      if(Math.abs(dx) >= Math.abs(dy)){
+        touchLeft  = dx < 0
+        touchRight = dx > 0
+        touchUp    = false
+        touchDown  = false
+      } else {
+        touchLeft  = false
+        touchRight = false
+        touchUp    = dy < 0
+        touchDown  = dy > 0
+      }
+    }
+  }
+}
+
 }, { passive: false })
 
 canvas.addEventListener("touchstart", e => {
@@ -374,7 +435,7 @@ let y = (touch.clientY - rect.top) * (H / rect.height)
 tapToContinue = true
 
 
-if(
+if(state === "start" &&
 x > startButton.x - 10 &&
 x < startButton.x + startButton.w + 10 &&
 y > startButton.y - 10 &&
@@ -455,63 +516,96 @@ y > 380 && y < 430){
 initRhythmGame()
 }
 
-/* MOBILE CONTROL BUTTONS */
+/* JOYSTICK + ACTION BUTTON */
 
-let s = mobileControls.size / 2
-let sa = mobileControls.actionSize / 2
+for(let i = 0; i < e.touches.length; i++){
+  let t  = e.touches[i]
+  let tx = (t.clientX - rect.left) * (W / rect.width)
+  let ty = (t.clientY - rect.top)  * (H / rect.height)
 
-function hit(b){ return Math.abs(x - b.x) < s && Math.abs(y - b.y) < s }
-function hitAction(b){ return Math.abs(x - b.x) < sa && Math.abs(y - b.y) < sa }
-
-touchLeft = hit(mobileControls.left)
-touchRight = hit(mobileControls.right)
-
-if(hitAction(mobileControls.center)){
-
-if(showRingPopup){
-showRingPopup = false
-state = "coastalstory"
-storyJustEntered = true
-coastalStorySpacePressedLastFrame = true
-} else if(state === "altar" && rhythmState === "minigame"){
-// centre/action button = col 1 (on tap)
-if(!rhythmColHeld[1]){ rhythmJustPressed[1]=true; checkRhythmInput(1); rhythmJustPressed[1]=false; rhythmColHeld[1] = true }
-} else if(state === "garden"){
-if(nearDigSpot && digTimer === 0){
-digTimer = 12
-touchDigFired = true
-}
-} else {
-luna.vy = -8
-}
-
-}
-
-// rhythm game - 4 columns tapped at bottom
-if(RHYTHM_GAME_ENABLED && state === "altar" && rhythmState === "minigame"){
-for(let col = 0; col < 4; col++){
-  let cx = rhythmColX(col)
-  if(Math.abs(x - cx) < 40 && y > H - 110){
-    if(!rhythmColHeld[col]){ rhythmJustPressed[col]=true; checkRhythmInput(col); rhythmJustPressed[col]=false; rhythmColHeld[col]=true }
+  // Joystick: left half of screen
+  if(tx < W / 2 && ty > H / 2){
+    joystick.active = true
+    let dx = tx - joystick.x
+    let dy = ty - joystick.y
+    let dist = Math.sqrt(dx*dx + dy*dy)
+    let clamped = Math.min(dist, joystick.outerR)
+    let angle = Math.atan2(dy, dx)
+    joystick.nubX = joystick.x + Math.cos(angle) * clamped
+    joystick.nubY = joystick.y + Math.sin(angle) * clamped
+    if(dist > joystick.deadZone){
+      // dominant axis wins — prevents diagonal movement
+      if(Math.abs(dx) >= Math.abs(dy)){
+        touchLeft  = dx < 0
+        touchRight = dx > 0
+        touchUp    = false
+        touchDown  = false
+      } else {
+        touchLeft  = false
+        touchRight = false
+        touchUp    = dy < 0
+        touchDown  = dy > 0
+      }
+    }
   }
-}
-}
 
-if(state === "garden"){
-touchUp = hit(gardenControls.up)
-touchDown = hit(gardenControls.down)
+  // Action button: right half of screen
+  let adx = tx - actionButton.x
+  let ady = ty - actionButton.y
+  if(Math.sqrt(adx*adx + ady*ady) < actionButton.r * 1.3){
+    if(showRingPopup){
+      showRingPopup = false
+      state = "coastalstory"
+      storyJustEntered = true
+      coastalStorySpacePressedLastFrame = true
+    } else if(state === "altar" && rhythmState === "minigame"){
+      if(!rhythmColHeld[1]){ rhythmJustPressed[1]=true; checkRhythmInput(1); rhythmJustPressed[1]=false; rhythmColHeld[1] = true }
+    } else if(state === "garden"){
+      if(nearDigSpot && digTimer === 0){
+        digTimer = 12
+        touchDigFired = true
+      }
+    } else {
+      luna.vy = -8
+      jumpHeld = true
+    }
+  }
+
+  // rhythm game - 4 columns tapped at bottom
+  if(RHYTHM_GAME_ENABLED && state === "altar" && rhythmState === "minigame"){
+    for(let col = 0; col < 4; col++){
+      let cx = rhythmColX(col)
+      if(Math.abs(tx - cx) < 40 && ty > H - 110){
+        if(!rhythmColHeld[col]){ rhythmJustPressed[col]=true; checkRhythmInput(col); rhythmJustPressed[col]=false; rhythmColHeld[col]=true }
+      }
+    }
+  }
 }
 
 })
 
-canvas.addEventListener("touchend", () => {
+canvas.addEventListener("touchend", e => {
 
-touchLeft = false
-touchRight = false
+// Only reset joystick if no touches remain on left half
+let rect = canvas.getBoundingClientRect()
+let anyLeft = false
+for(let i = 0; i < e.touches.length; i++){
+  let tx = (e.touches[i].clientX - rect.left) * (W / rect.width)
+  if(tx < W / 2 && ty > H / 2) anyLeft = true
+}
+if(!anyLeft){
+  joystick.active = false
+  joystick.nubX = joystick.x
+  joystick.nubY = joystick.y
+  touchLeft  = false
+  touchRight = false
+  touchUp    = false
+  touchDown  = false
+}
+
 touchJump = false
+jumpHeld = false
 touchDig = false
-touchUp = false
-touchDown = false
 rhythmColHeld = [false, false, false, false]
 
 })
@@ -539,10 +633,30 @@ if(state === "garden" && digTimer > 0){
 frame = lunaDig
 }
 
+/* JUMP / FALL / LAND (coastal/village only) */
+
+else if((state === "coastal" || state === "village") && landTimer > 0){
+// just landed — brief lunaDown2 flash
+frame = lunaDown2
+bob = 0
+}
+
+else if((state === "coastal" || state === "village") && luna.vy < 0){
+// rising — jump held = lunaJump1, released = lunaJump2
+frame = jumpHeld ? lunaJump1 : lunaJump2
+bob = 0
+}
+
+else if((state === "coastal" || state === "village") && luna.vy > 0){
+// falling
+frame = lunaDown1
+bob = 0
+}
+
 /* WALKING UP (garden up key, or aisle runner) */
 
 else if(
-  (keys["ArrowUp"] || touchUp) ||
+  (keys["ArrowUp"] || (touchUp && state === "garden")) ||
   (state === "altar" && rhythmState === "walking")
 ){
 let step = Math.floor(Date.now()/160) % 2
@@ -550,9 +664,20 @@ frame = step ? lunaWalk1 : lunaWalk2
 bob = step ? -2 : 0
 }
 
-/* RUNNING LEFT/RIGHT */
+/* WALKING DOWN (toward camera) */
 
-else if(keys["ArrowLeft"] || keys["ArrowRight"] || touchLeft || touchRight){
+else if(keys["ArrowDown"] || (touchDown && state === "garden")){
+let step = Math.floor(Date.now()/160) % 2
+frame = step ? lunaFrontWalk1 : lunaFrontWalk2
+bob = step ? -2 : 0
+}
+
+/* RUNNING LEFT/RIGHT — always animate in coastal/village, or when key held */
+
+else if(
+  keys["ArrowLeft"] || keys["ArrowRight"] || touchLeft || touchRight ||
+  state === "coastal" || state === "village"
+){
 let step = Math.floor(Date.now()/160) % 2
 frame = step ? luna1 : luna2
 bob = step ? -2 : 0
@@ -607,13 +732,8 @@ function drawMobileControls(){
 
 if(!isMobile) return
 
-let s = mobileControls.size
-let sa = mobileControls.actionSize
-
-ctx.globalAlpha = 0.7
-
 if(state === "altar" && rhythmState === "minigame"){
-  // 4 coloured tap buttons matching the 4 columns
+  ctx.globalAlpha = 0.7
   for(let col = 0; col < 4; col++){
     let cx = rhythmColX(col)
     drawHeart(cx, H - 50, 48, HEART_COLS[col], 0.85, HEART_COLS[col])
@@ -622,40 +742,69 @@ if(state === "altar" && rhythmState === "minigame"){
   return
 }
 
-if(state === "garden" || state === "coastal" || state === "village" || state === "altar"){
+if(state !== "garden" && state !== "coastal" && state !== "village" && state !== "altar") return
 
-ctx.drawImage(btnLeft,
-mobileControls.left.x - s/2,
-mobileControls.left.y - s/2,
-s, s)
+// on the pale aisle background, use darker tones; elsewhere use white
+let isAisle = (state === "altar")
+let jRingStroke  = isAisle ? "rgba(80,50,120,0.4)"  : "rgba(255,255,255,0.35)"
+let jRingFill    = isAisle ? "rgba(80,50,120,0.12)"  : "rgba(255,255,255,0.08)"
+let jNubFill     = isAisle ? "rgba(80,50,120,0.45)"  : "rgba(255,255,255,0.45)"
+let jNubStroke   = isAisle ? "rgba(80,50,120,0.8)"   : "rgba(255,255,255,0.7)"
 
-ctx.drawImage(btnRight,
-mobileControls.right.x - s/2,
-mobileControls.right.y - s/2,
-s, s)
-
-ctx.drawImage(btnAction,
-mobileControls.center.x - sa/2,
-mobileControls.center.y - sa/2,
-sa, sa)
-
+/* --- FADE BEHIND CONTROLS (aisle only) --- */
+if(isAisle){
+  let grad = ctx.createRadialGradient(joystick.x, joystick.y, 0, joystick.x, joystick.y, joystick.outerR * 2.2)
+  grad.addColorStop(0, "rgba(0,0,0,0.18)")
+  grad.addColorStop(1, "rgba(0,0,0,0)")
+  ctx.fillStyle = grad
+  ctx.beginPath()
+  ctx.arc(joystick.x, joystick.y, joystick.outerR * 2.2, 0, Math.PI * 2)
+  ctx.fill()
 }
 
-if(state === "garden"){
+/* --- JOYSTICK --- */
+let jx = joystick.x, jy = joystick.y
+let outerR = joystick.outerR, innerR = joystick.innerR
 
-ctx.drawImage(btnUp,
-gardenControls.up.x - s/2,
-gardenControls.up.y - s/2,
-s, s)
+// outer ring
+ctx.beginPath()
+ctx.arc(jx, jy, outerR, 0, Math.PI * 2)
+ctx.strokeStyle = jRingStroke
+ctx.lineWidth = 2
+ctx.stroke()
+ctx.fillStyle = jRingFill
+ctx.fill()
 
-ctx.drawImage(btnDown,
-gardenControls.down.x - s/2,
-gardenControls.down.y - s/2,
-s, s)
+// nub
+ctx.beginPath()
+ctx.arc(joystick.nubX, joystick.nubY, innerR, 0, Math.PI * 2)
+ctx.fillStyle = jNubFill
+ctx.fill()
+ctx.strokeStyle = jNubStroke
+ctx.lineWidth = 1.5
+ctx.stroke()
 
+/* --- ACTION BUTTON (hidden on altar walking level) --- */
+if(state !== "altar"){
+let ax = actionButton.x, ay = actionButton.y, ar = actionButton.r
+
+ctx.beginPath()
+ctx.arc(ax, ay, ar, 0, Math.PI * 2)
+ctx.fillStyle = "rgba(255,255,255,0.15)"
+ctx.fill()
+ctx.strokeStyle = "rgba(255,255,255,0.55)"
+ctx.lineWidth = 2
+ctx.stroke()
+
+// label inside action button
+ctx.fillStyle = "rgba(255,255,255,0.8)"
+ctx.font = "bold 16px sans-serif"
+ctx.textAlign = "center"
+ctx.textBaseline = "middle"
+let label = (state === "garden" && nearDigSpot) ? "dig" : "jump"
+ctx.fillText(label, ax, ay)
+ctx.textBaseline = "alphabetic"
 }
-
-ctx.globalAlpha = 1
 
 }
 
@@ -667,12 +816,12 @@ if(state === "start") return
 
 // during rhythm minigame, show dedicated score strip instead of normal UI
 if(RHYTHM_GAME_ENABLED && state === "altar" && rhythmState === "minigame"){
-  ctx.fillStyle = "rgba(255,255,255,0.6)"
-  ctx.fillRect(0, 0, W, 56)
+  ctx.fillStyle = "#c8aee0"
+  ctx.fillRect(0, 0, W, UI_H)
 
   // song label
   ctx.fillStyle = "#b03070"
-  ctx.font = "bold 13px 'GameFont', sans-serif"
+  ctx.font = "bold 13px 'DeliusSwash', sans-serif"
   ctx.textAlign = "center"
   ctx.fillText("♪ Here Comes the Bride! ♪", W/2, 16)
 
@@ -680,7 +829,7 @@ if(RHYTHM_GAME_ENABLED && state === "altar" && rhythmState === "minigame"){
   let heartSize = 13
   let spacing = 17
   let startX = 12
-  ctx.font = "10px 'GameFont', sans-serif"
+  ctx.font = "10px 'DeliusSwash', sans-serif"
   ctx.fillStyle = "#b03070"
   ctx.textAlign = "left"
   ctx.fillText("hits", startX, 30)
@@ -693,7 +842,7 @@ if(RHYTHM_GAME_ENABLED && state === "altar" && rhythmState === "minigame"){
   let missX = W - 12
   ctx.textAlign = "right"
   ctx.fillStyle = rhythmMissCount >= 4 ? "#cc2200" : "#888"
-  ctx.font = "10px 'GameFont', sans-serif"
+  ctx.font = "10px 'DeliusSwash', sans-serif"
   ctx.fillText("misses", missX, 30)
   for(let i = 0; i < 6; i++){
     let hx = missX - i * spacing
@@ -710,73 +859,71 @@ if(RHYTHM_GAME_ENABLED && state === "altar" && rhythmState === "minigame"){
   return
 }
 
-/* UI BACKGROUND STRIP */
+/* UI BACKGROUND STRIP — solid lavender */
 
-ctx.fillStyle = "rgba(255,255,255,0.6)"
-ctx.fillRect(0,0,W,60)
+ctx.fillStyle = "#c8aee0"
+ctx.fillRect(0, 0, W, UI_H)
 
-/* RING ICON (TOP LEFT) */
+/* RING ICON — left aligned, no badge */
 
+let iconS = 44
+let iconX = 12
+let iconY = (UI_H - iconS) / 2
 if(hasRing){
-
-ctx.drawImage(
-ringbox,
-20,
-12,
-36,
-36
-)
-
+  ctx.drawImage(ringbox, iconX, iconY, iconS, iconS)
 }
 
+/* ENERGY BAR — right side */
 
-/* ENERGY BAR (TOP CENTRE) */
+let barW = 160, barH = 22, barR = barH/2
+let barPad = 14                          // gap from right edge
+let barX = W - barPad - barW
+let barY = (UI_H - barH) / 2
 
-let barWidth = 160
-let barHeight = 14
-let barX = W/2 - barWidth/2
-let barY = 25
+// white pill background
+ctx.fillStyle = "white"
+ctx.beginPath()
+ctx.roundRect(barX, barY, barW, barH, barR)
+ctx.fill()
 
-// gravy bone icon
-ctx.drawImage(
-gravybone,
-barX - 45,
-barY - 12,
-36,
-36
-)
+// 10 pink segments
+let segCount = 10, segGap = 3, segPad = 4
+let segW = (barW - segPad*2 - (segCount-1)*segGap) / segCount
+let filledSegs = Math.ceil((energy / 100) * segCount)
 
-// outline
-ctx.strokeStyle = "#000"
-ctx.lineWidth = 3
-ctx.lineJoin = "round"
-ctx.strokeRect(barX,barY,barWidth,barHeight)
+ctx.save()
+ctx.beginPath()
+ctx.roundRect(barX, barY, barW, barH, barR)
+ctx.clip()
 
-// fill
-ctx.fillStyle = "#8cff66"
-ctx.fillRect(barX,barY,(energy/100)*barWidth,barHeight)
+for(let i = 0; i < filledSegs; i++){
+  let sx = barX + segPad + i * (segW + segGap)
+  let rL = i === 0            ? barR : 3
+  let rR = i === filledSegs-1 ? barR : 3
+  ctx.fillStyle = "#f077a8"
+  ctx.beginPath()
+  ctx.roundRect(sx, barY + segPad, segW, barH - segPad*2, [rL, rR, rR, rL])
+  ctx.fill()
+}
+ctx.restore()
 
+/* FLOWER COUNTER — centred in gap between ringbox and energy bar */
 
-/* FLOWER COUNTER (TOP RIGHT) */
+let tIconS = 46
+let gapLeft  = iconX + iconS + 4         // right edge of ring icon zone
+let gapRight = barX - 4                  // left edge of bar zone
+let gapCX    = (gapLeft + gapRight) / 2  // centre of the gap
+let tIconX   = gapCX - tIconS/2 - 22    // tulip left edge (icon + text together)
+let tIconY   = (UI_H - tIconS) / 2
 
-ctx.fillStyle = "#000"
-ctx.font = "18px sans-serif"
-ctx.textAlign = "right"
+ctx.drawImage(tulip, tIconX, tIconY, tIconS, tIconS)
 
-/* FLOWER COUNTER (TOP RIGHT) */
-
-ctx.drawImage(
-tulip,
-W - 90,
-10,
-36,
-36
-)
-ctx.fillText(
-flowers,
-W - 20,
-35
-)
+ctx.fillStyle = "#5a3870"
+ctx.font = "bold 24px 'DeliusSwash', sans-serif"
+ctx.textAlign = "left"
+ctx.textBaseline = "middle"
+ctx.fillText("x" + flowers, tIconX + tIconS + 4, UI_H/2)
+ctx.textBaseline = "alphabetic"
 
 /* PROGRESS BAR (below UI bar, coastal + village only) */
 
@@ -936,6 +1083,8 @@ luna.x -= 3
 luna.dir = - 1
 }
 
+luna.x = Math.max(20, Math.min(W - 20, luna.x))
+
 if(keys["ArrowUp"] || touchUp) luna.y-=3
 if(keys["ArrowDown"] || touchDown) luna.y+=3
 
@@ -993,7 +1142,7 @@ function drawGarden(){
 
 // grass background
 for(let x=0; x<W; x+=64){
-for(let y=0; y<H; y+=64){
+for(let y=UI_H; y<H; y+=64){
 
 ctx.drawImage(
 grasstile,
@@ -1223,6 +1372,8 @@ luna.x-=3
 luna.dir=-1
 }
 
+luna.x = Math.max(20, Math.min(W - 20, luna.x))
+
 /* RUNNING DUST */
 
 if((keys["ArrowLeft"] || keys["ArrowRight"]) && luna.y >= 500){
@@ -1245,6 +1396,7 @@ life: 20
 
 if(keys[" "] || touchJump && luna.vy==0){
 luna.vy=-8
+energy = Math.max(0, energy - 0.5)
 }
 
 /* gravity */
@@ -1252,7 +1404,7 @@ luna.vy=-8
 luna.vy+=0.6
 luna.y+=luna.vy
 
-platformsCoastal = platformsCoastal.filter(p => p.x + p.w > -20)
+platformsCoastal = platformsCoastal.filter(p => p.x + p.w > -200)
 flowersCoastal = flowersCoastal.filter(f => f.x > -20)
 bones = bones.filter(b => b.x > -20)
 
@@ -1271,6 +1423,7 @@ luna.y < p.y + 20 &&
 luna.vy >= 0
 ){
 luna.y = p.y
+if(luna.vy > 0) landTimer = LAND_FRAMES
 luna.vy = 0
 }
 })
@@ -1281,6 +1434,7 @@ let groundY=510
 
 if(!onPlatform && luna.y>groundY){
 luna.y=groundY
+if(luna.vy > 0) landTimer = LAND_FRAMES
 luna.vy=0
 }
 
@@ -1343,7 +1497,7 @@ sky.addColorStop(0,"#dbe9f4")
 sky.addColorStop(1,"#9ec9e6")
 
 ctx.fillStyle=sky
-ctx.fillRect(0,0,W,H)
+ctx.fillRect(0,UI_H,W,H-UI_H)
 
 /* SEA */
 
@@ -1480,32 +1634,46 @@ if(W - last.x < minGap) return
 
 }
 
+const OBSTACLE_YS = [450, 470, 490]
+let oType = Math.floor(Math.random()*3)
 obstacles.push({
 x:W+100,
-y:510,
+y: OBSTACLE_YS[Math.floor(Math.random()*3)],
 hit:false,
-type: Math.floor(Math.random()*3)
+type: oType
 })
 
 }
 
+// shared y positions and obstacle-check helper for village collectibles
+const VILLAGE_COLLECT_YS = [420, 450, 470, 490, 530]  // 420 = above obstacles, rest match obstacle heights
+
+function villageAvailableYs(allYs, challengeChance){
+  let blockedYs = new Set()
+  obstacles.forEach(o => {
+    if(o.x > W - 120) blockedYs.add(o.y)
+  })
+  let available = allYs.filter(y => !blockedYs.has(y))
+  if(available.length === 0) available = allYs
+  // challengeChance = probability of ignoring the check (overlapping obstacle)
+  return Math.random() < (1 - challengeChance)
+    ? available[Math.floor(Math.random() * available.length)]
+    : allYs[Math.floor(Math.random() * allYs.length)]
+}
+
 function spawnVillageFlower(){
-
-flowersVillage.push({
-x: W + 100,
-y: 530
-})
-
+  flowersVillage.push({
+    x: W + 100,
+    y: villageAvailableYs(VILLAGE_COLLECT_YS, 0.3)
+  })
 }
 
 
 function spawnVillageBone(){
-
-bonesVillage.push({
-x:W+100,
-y:440
-})
-
+  bonesVillage.push({
+    x: W + 100,
+    y: villageAvailableYs(VILLAGE_COLLECT_YS, 0.2)
+  })
 }
 
 function updateVillage(){
@@ -1521,6 +1689,8 @@ if(keys["ArrowLeft"] || touchLeft){
 luna.x -= 3
 luna.dir = - 1
 }
+
+luna.x = Math.max(20, Math.min(W - 20, luna.x))
 
 if(Math.random()<0.01) spawnVillageFlower()
 
@@ -1592,6 +1762,7 @@ o.hit = true
 
 if(keys[" "]|| touchJump && luna.y===540){
 luna.vy=-10
+energy = Math.max(0, energy - 0.5)
 }
 
 luna.vy+=0.5
@@ -1599,6 +1770,7 @@ luna.y+=luna.vy
 
 if(luna.y>540){
 luna.y=540
+if(luna.vy > 0) landTimer = LAND_FRAMES
 luna.vy=0
 }
 
@@ -1614,12 +1786,12 @@ function drawVillage(){
 
 /* SKY */
 
-let sky = ctx.createLinearGradient(0,0,0,H)
+let sky = ctx.createLinearGradient(0,UI_H,0,H)
 sky.addColorStop(0,"#e6f2ff")
 sky.addColorStop(1,"#ffffff")
 
 ctx.fillStyle = sky
-ctx.fillRect(0,0,W,H)
+ctx.fillRect(0,UI_H,W,H-UI_H)
 
 
 /* FIELDS BACKGROUND */
@@ -1739,7 +1911,7 @@ if(o.type === 2){
 ctx.drawImage(
 seagull,
 o.x,
-450,
+o.y,
 80,
 70
 )
@@ -1754,7 +1926,7 @@ if(o.type === 0){
 ctx.drawImage(
 flowerpot,
 o.x,
-470,
+o.y,
 80,
 80
 )
@@ -1769,7 +1941,7 @@ if(o.type === 1){
 ctx.drawImage(
 crate,
 o.x,
-490,
+o.y,
 90,
 80
 )
@@ -1914,7 +2086,8 @@ function spawnFlowerRow(startY){
       lane: lanes[i],
       x: AISLE_LANE_XS[lanes[i]],
       y: startY,
-      withered: i === witheredSlot
+      withered: i === witheredSlot,
+      rot: (Math.random() - 0.5) * 0.35   // random tilt up to ~20 degrees either way
     })
   }
 }
@@ -1941,6 +2114,9 @@ let runnerFlowers = []               // {lane, y} collectible flowers
 let runnerFlowerTimer = 0
 let tripleRowCooldown = 0   // frames to wait before a 3-lane row can appear again
 let runnerInputLock = false          // prevents holding key for instant lane changes
+let runnerLockedDir = ""
+let runnerHoldTimer = 0               // frames held in same direction
+const RUNNER_HOLD_DELAY = 28          // frames before repeat fires (~0.47s at 60fps)
 let rhythmTimer = 0
 let rhythmNotes = []
 let rhythmHits = []
@@ -2078,21 +2254,38 @@ function updateAltar(){
 // ── RUNNER PHASE ──────────────────────────────────────────────────────────
 if(rhythmState === "walking"){
 
-  // lane switching — left/right, with input lock so tap = one lane at a time
+  // lane switching — tap moves one lane, hold past RUNNER_HOLD_DELAY repeats
   let wantLeft  = keys["ArrowLeft"]  || touchLeft
   let wantRight = keys["ArrowRight"] || touchRight
+
+  // track how long the current direction has been held
+  let holdingDir = (wantLeft && runnerLockedDir === "left") || (wantRight && runnerLockedDir === "right")
+  if(runnerInputLock && holdingDir){
+    runnerHoldTimer++
+    if(runnerHoldTimer >= RUNNER_HOLD_DELAY){
+      // release lock so the same direction can fire again
+      runnerInputLock = false
+      runnerHoldTimer = 0
+    }
+  }
 
   if(!runnerInputLock){
     if(wantLeft && runnerTargetLane > 0){
       runnerTargetLane--
       runnerInputLock = true
+      runnerLockedDir = "left"
+      runnerHoldTimer = 0
     } else if(wantRight && runnerTargetLane < 2){
       runnerTargetLane++
       runnerInputLock = true
+      runnerLockedDir = "right"
+      runnerHoldTimer = 0
     }
   }
-  // release lock when no key held
-  if(!wantLeft && !wantRight) runnerInputLock = false
+  // release lock when neutral, or when joystick crosses to the opposite direction
+  if(!wantLeft && !wantRight){ runnerInputLock = false; runnerHoldTimer = 0 }
+  if(runnerInputLock && runnerLockedDir === "left"  && !wantLeft){  runnerInputLock = false; runnerHoldTimer = 0 }
+  if(runnerInputLock && runnerLockedDir === "right" && !wantRight){ runnerInputLock = false; runnerHoldTimer = 0 }
 
   // smooth lerp Luna to target lane
   let targetX = AISLE_LANE_XS[runnerTargetLane]
@@ -2243,13 +2436,13 @@ if(RHYTHM_GAME_ENABLED && rhythmState === "failed"){
   ctx.fillRect(0, 0, W, H)
   ctx.textAlign = "center"
   ctx.fillStyle = "#ff6b6b"
-  ctx.font = "bold 26px 'GameFont', sans-serif"
+  ctx.font = "bold 26px 'DeliusSwash', sans-serif"
   ctx.fillText("Oh no! 💔", W/2, 220)
   ctx.fillStyle = "white"
-  ctx.font = "16px 'GameFont', sans-serif"
+  ctx.font = "16px 'DeliusSwash', sans-serif"
   ctx.fillText("Luna dropped the rings!", W/2, 270)
   ctx.fillText("Too many notes missed...", W/2, 300)
-  ctx.font = "13px 'GameFont', sans-serif"
+  ctx.font = "13px 'DeliusSwash', sans-serif"
   ctx.fillStyle = "#aaa"
   ctx.fillText("flowers & bones kept 🌷🦴", W/2, 340)
   ctx.fillStyle = "#e05cb0"
@@ -2257,7 +2450,7 @@ if(RHYTHM_GAME_ENABLED && rhythmState === "failed"){
   ctx.roundRect(W/2-100, 380, 200, 50, 25)
   ctx.fill()
   ctx.fillStyle = "white"
-  ctx.font = "bold 16px 'GameFont', sans-serif"
+  ctx.font = "bold 16px 'DeliusSwash', sans-serif"
   ctx.fillText("Try again 🎵", W/2, 411)
   return
 }
@@ -2267,16 +2460,21 @@ if(rhythmState === "walking"){
 
   // --- BACKGROUND ---
   ctx.fillStyle = "#f5ede0"
-  ctx.fillRect(0, 0, W, H)
+  ctx.fillRect(0, UI_H, W, H - UI_H)
 
   // --- SCROLLING AISLE ---
   if(aisleTile.complete && aisleTile.naturalWidth > 0){
     let tileH = aisleTile.naturalHeight
     let numTiles = Math.ceil(H / tileH) + 2
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(0, UI_H, W, H - UI_H)
+    ctx.clip()
     for(let i = 0; i < numTiles; i++){
       let ty = (runnerTileOffset % tileH) - tileH + i * tileH
       ctx.drawImage(aisleTile, 0, ty, W, tileH)
     }
+    ctx.restore()
   } else {
     // Programmatic aisle:
     // Layout (left→right):  pew(15%) | stone(10%) | carpet(50%) | stone(10%) | pew(15%)
@@ -2398,48 +2596,16 @@ if(rhythmState === "walking"){
   // --- FLOWERS (tulips) + WITHERED FLOWER OBSTACLES ---
   runnerFlowers.forEach(f => {
     if(!f.withered){
-      ctx.drawImage(tulip, f.x - 28, f.y - 35, 56, 70)
-    } else {
-      // programmatic withered flower placeholder — droopy, desaturated, brown/grey
       ctx.save()
       ctx.translate(f.x, f.y)
-
-      // drooping stem (curved, bent over)
-      ctx.strokeStyle = "#7a6040"
-      ctx.lineWidth = 3
-      ctx.lineCap = "round"
-      ctx.beginPath()
-      ctx.moveTo(0, 20)
-      ctx.bezierCurveTo(0, -5, 18, -18, 22, -34)
-      ctx.stroke()
-
-      // wilted petals (drooping downward, dull colours)
-      const wiltedCols = ["#9e8a6a","#b09070","#8a7a5a","#a08060","#927860"]
-      for(let p = 0; p < 5; p++){
-        let angle = (p / 5) * Math.PI * 2 + 0.3
-        // petals droop down rather than radiate outward
-        let px = 22 + Math.cos(angle) * 9
-        let py = -34 + 6 + Math.sin(angle) * 7 + 5  // shifted down for droop
-        ctx.fillStyle = wiltedCols[p]
-        ctx.globalAlpha = 0.85
-        ctx.beginPath()
-        ctx.ellipse(px, py, 5, 3, angle + 0.8, 0, Math.PI*2)
-        ctx.fill()
-      }
-
-      // withered centre — small, dull brown
-      ctx.globalAlpha = 1
-      ctx.fillStyle = "#6b4f2a"
-      ctx.beginPath()
-      ctx.arc(22, -34, 4, 0, Math.PI*2)
-      ctx.fill()
-
-      // small ❌ badge so it's obvious it's bad
-      ctx.fillStyle = "#cc2200"
-      ctx.font = "bold 14px sans-serif"
-      ctx.textAlign = "center"
-      ctx.fillText("✕", 6, -42)
-
+      ctx.rotate(f.rot || 0)
+      ctx.drawImage(tulip, -28, -35, 56, 70)
+      ctx.restore()
+    } else {
+      ctx.save()
+      ctx.translate(f.x, f.y)
+      ctx.rotate(f.rot || 0)
+      ctx.drawImage(witheredTulip, -28, -35, 56, 70)
       ctx.restore()
     }
   })
@@ -2461,7 +2627,7 @@ if(RHYTHM_GAME_ENABLED && rhythmState === "warmup"){
   ctx.drawImage(loadingScreen, 0, 0, W, H)
   let dots = Math.floor(rhythmWarmupTimer / 22) + 1
   ctx.fillStyle = "white"
-  ctx.font = "22px 'GameFont', sans-serif"
+  ctx.font = "22px 'DeliusSwash', sans-serif"
   ctx.textAlign = "center"
   ctx.fillText("Get ready" + ".".repeat(Math.min(dots, 3)), W/2, H/2 + 20)
   let progress = rhythmWarmupTimer / 90
@@ -2489,11 +2655,11 @@ ctx.fillStyle = aisleGrad
 ctx.fillRect(0, 0, W, H)
 
 ctx.fillStyle = "white"
-ctx.font = "20px 'GameFont', sans-serif"
+ctx.font = "20px 'DeliusSwash', sans-serif"
 ctx.textAlign = "center"
 ctx.fillText("🎵 Here Comes the Bride! 🎵", W/2, 50)
 
-ctx.font = "15px 'GameFont', sans-serif"
+ctx.font = "15px 'DeliusSwash', sans-serif"
 ctx.fillStyle = "#f098b6"
 ctx.fillText(rhythmScore + " / " + rhythmTotal, W/2, 78)
 
@@ -2578,7 +2744,7 @@ ctx.setLineDash([])
 
 let allDone = rhythmNotes.every(n => n.hit || n.missed)
 if(allDone && rhythmFinishTimer > 0){
-  ctx.fillStyle = "white"; ctx.font = "22px 'GameFont', sans-serif"; ctx.textAlign = "center"
+  ctx.fillStyle = "white"; ctx.font = "22px 'DeliusSwash', sans-serif"; ctx.textAlign = "center"
   let msg = rhythmScore === rhythmTotal ? "Perfect! 💍" : rhythmScore > rhythmTotal * 0.6 ? "Beautiful! 💍" : "The rings are delivered! 💍"
   ctx.fillText(msg, W/2, H/2)
 }
@@ -2609,23 +2775,23 @@ confetti.forEach(c=>{
 
 ctx.fillStyle="#333"
 ctx.textAlign="center"
-ctx.font="28px 'GameFont', sans-serif"
+ctx.font="28px 'DeliusSwash', sans-serif"
 ctx.fillText("Congratulations Jonny & Lottie!",W/2,200)
 
-ctx.font="16px 'GameFont', sans-serif"
+ctx.font="16px 'DeliusSwash', sans-serif"
 ctx.fillText("Luna delivered the rings! 💍",W/2,240)
 
 let exploringScore = flowers * 10 + Math.round(energy) + bonesEaten * 5
 let totalScore = exploringScore
 
-ctx.font="14px 'GameFont', sans-serif"
+ctx.font="14px 'DeliusSwash', sans-serif"
 ctx.fillStyle="#555"
 let ly = 285
 ctx.fillText("🌷 Flowers collected: " + flowers + "  ×10 = " + (flowers*10) + " pts", W/2, ly)
 ctx.fillText("⚡ Energy remaining: " + Math.round(energy) + "% = " + Math.round(energy) + " pts", W/2, ly+24)
 ctx.fillText("🦴 Gravy bones eaten: " + bonesEaten + "  ×5 = " + (bonesEaten*5) + " pts", W/2, ly+48)
 
-ctx.font="bold 22px 'GameFont', sans-serif"
+ctx.font="bold 22px 'DeliusSwash', sans-serif"
 ctx.fillStyle="#e05cb0"
 ctx.fillText("Total score: " + totalScore, W/2, ly+90)
 
@@ -2635,7 +2801,7 @@ ctx.beginPath()
 ctx.roundRect(W/2-100, ly+115, 200, 50, 25)
 ctx.fill()
 ctx.fillStyle="white"
-ctx.font="bold 16px 'GameFont', sans-serif"
+ctx.font="bold 16px 'DeliusSwash', sans-serif"
 ctx.fillText("Play again 🐾", W/2, ly+146)
 
 // confetti cannon button
@@ -2644,7 +2810,7 @@ ctx.beginPath()
 ctx.roundRect(W/2-120, ly+180, 240, 50, 25)
 ctx.fill()
 ctx.fillStyle="#333"
-ctx.font="bold 14px 'GameFont', sans-serif"
+ctx.font="bold 14px 'DeliusSwash', sans-serif"
 ctx.fillText("🎉 super secret confetti cannon 🎉", W/2, ly+211)
 
 }
@@ -3075,6 +3241,7 @@ runnerProgress = 0
 runnerTileOffset = 0
 initRunnerFlowers()
 runnerInputLock = false
+runnerHoldTimer = 0
 state = "garden"
 generateDigSpots()
 digTimer = 0
@@ -3131,6 +3298,10 @@ updateFade()
 
 if(digTimer > 0){
 digTimer--
+}
+
+if(landTimer > 0){
+landTimer--
 }
 
 dust.forEach(d=>{
