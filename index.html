@@ -445,7 +445,18 @@ startGame()
 }
 
 
-if(state === "gardenstory" && !storyJustEntered && !gardenStorySpacePressedLastFrame){
+// Story screens — must tap the continue button (generous 40px margin)
+const STORY_BTN_BW = 220, STORY_BTN_BH = 56
+const STORY_BTN_X  = W/2 - STORY_BTN_BW/2
+const STORY_BTN_Y  = H - 175
+const STORY_BTN_MARGIN = 40
+const storyBtnHit = x > STORY_BTN_X - STORY_BTN_MARGIN &&
+                    x < STORY_BTN_X + STORY_BTN_BW + STORY_BTN_MARGIN &&
+                    y > STORY_BTN_Y - STORY_BTN_MARGIN &&
+                    y < STORY_BTN_Y + STORY_BTN_BH + STORY_BTN_MARGIN
+
+if(state === "gardenstory" && !storyJustEntered && storyBtnHit){
+gardenStorySpacePressedLastFrame = true
 fadeOutStartMusic(()=>{
 state = "garden"
 generateDigSpots()
@@ -453,7 +464,8 @@ digTimer = 0
 })
 }
 
-if(state === "coastalstory" && !storyJustEntered && !coastalStorySpacePressedLastFrame){
+if(state === "coastalstory" && !storyJustEntered && storyBtnHit){
+coastalStorySpacePressedLastFrame = true
 state = "coastal"
 luna.x = 50
 luna.y = 500
@@ -464,7 +476,8 @@ bones = []
 initCoastalPlatforms()
 }
 
-if(state === "villagestory" && !storyJustEntered && !villageStorySpacePressedLastFrame){
+if(state === "villagestory" && !storyJustEntered && storyBtnHit){
+villageStorySpacePressedLastFrame = true
 state = "village"
 scroll = 0
 obstacles = []
@@ -474,9 +487,9 @@ luna.x = 100
 luna.y = 540
 }
 
-if(state === "altarstory" && !storyJustEntered && !altarStorySpacePressedLastFrame){
+if(state === "altarstory" && !storyJustEntered && storyBtnHit){
+altarStorySpacePressedLastFrame = true
 state = "altar"
-// initialise runner for fresh entry
 runnerLane = 1
 runnerTargetLane = 1
 runnerLaneX = W * 0.5
@@ -2966,8 +2979,38 @@ gardenStorySpacePressedLastFrame = keys[" "] || touchJump || touchDig
 
 
 
+function drawStoryContinueButton(){
+  let bw = 220, bh = 56, bx = W/2 - bw/2, by = H - 175
+  // pill shadow
+  ctx.globalAlpha = 0.25
+  ctx.fillStyle = "#000"
+  ctx.beginPath()
+  ctx.roundRect(bx+4, by+4, bw, bh, 28)
+  ctx.fill()
+  // white background
+  ctx.globalAlpha = 1
+  ctx.fillStyle = "#fff"
+  ctx.beginPath()
+  ctx.roundRect(bx, by, bw, bh, 28)
+  ctx.fill()
+  // pill stroke
+  ctx.strokeStyle = "#ae84c8"
+  ctx.lineWidth = 3
+  ctx.beginPath()
+  ctx.roundRect(bx, by, bw, bh, 28)
+  ctx.stroke()
+  // label
+  ctx.fillStyle = "#ae84c8"
+  ctx.font = "bold 22px 'DeliusSwash', sans-serif"
+  ctx.textAlign = "center"
+  ctx.textBaseline = "middle"
+  ctx.fillText("Tap to continue ✦", W/2, by + bh/2)
+  ctx.textBaseline = "alphabetic"
+}
+
 function drawGardenStory(){
 ctx.drawImage(gardenStoryImg, 0, 0, W, H)
+if(!storyJustEntered) drawStoryContinueButton()
 }
 
 function updateCoastalStory(){
@@ -2991,6 +3034,7 @@ coastalStorySpacePressedLastFrame = keys[" "] || touchJump || touchDig
 
 function drawCoastalStory(){
 ctx.drawImage(coastalStoryImg, 0, 0, W, H)
+if(!storyJustEntered) drawStoryContinueButton()
 }
 
 function updateVillageStory(){
@@ -3013,6 +3057,7 @@ villageStorySpacePressedLastFrame = keys[" "] || touchJump || touchDig
 
 function drawVillageStory(){
 ctx.drawImage(villageStoryImg, 0, 0, W, H)
+if(!storyJustEntered) drawStoryContinueButton()
 }
 
 function updateAltarStory(){
@@ -3033,6 +3078,7 @@ altarStorySpacePressedLastFrame = keys[" "] || touchJump || touchDig
 
 function drawAltarStory(){
 ctx.drawImage(altarStoryImg, 0, 0, W, H)
+if(!storyJustEntered) drawStoryContinueButton()
 }
 
 function updatePostRunnerStory(){
