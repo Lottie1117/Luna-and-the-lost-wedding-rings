@@ -132,12 +132,15 @@ const houseRow         = loadImage("house-row.png")
 const path             = loadImage("path.png")
 const sandpath         = loadImage("sandpath.png")
 const jonny1           = loadImage("jonny1.png")
+const jonnyJump1       = loadImage("jonnyjump1.png")
 const jonny2           = loadImage("jonny1.png")   // placeholder — swap jonny2.png when ready
 const jonny3           = loadImage("jonny1.png")   // placeholder — swap jonny3.png when ready
 const bggrass          = loadImage("bggrass.png")
 const lottie1          = loadImage("lottie1.png")
+const lottieJump1      = loadImage("lottiejump1.png")
 const lottie2          = loadImage("lottie1.png")  // placeholder — swap lottie2.png when ready
 const lottie3          = loadImage("lottie1.png")  // placeholder — swap lottie3.png when ready
+const ringStoryImg     = loadImage("ringstory.png")
 const flowerpot        = loadImage("flowerpot.png")
 const crate            = loadImage("crate.png")
 const wall             = loadImage("wall.png")
@@ -3213,16 +3216,8 @@ function updatePostRunnerStory(){
 }
 
 function drawPostRunnerStory(){
-  // ── BACKGROUND — same altar setup ──
-  ctx.fillStyle = "#ffe4e1"
-  ctx.fillRect(0, 0, W, H)
-
-  // aisle carpet strip
-  ctx.fillStyle = "#8b0000"
-  ctx.fillRect(W/2 - 40, 56, 80, H - 56)
-
-  // arch at top
-  ctx.drawImage(arch, W/2 - 190, 20, 380, 240)
+  // ── BACKGROUND ──
+  ctx.drawImage(ringStoryImg, 0, 0, W, H)
 
   // ── SCENE PHASES ──
   const WALK_END    = 90    // luna arrives
@@ -3230,38 +3225,49 @@ function drawPostRunnerStory(){
   const CELEB_START = 150
   const CONFETTI_START = 330
 
+  // Layout constants derived from mockup (canvas 420×700):
+  // Couple feet land at y≈480, sprite height 210px → top at y≈270
+  // Jonny  centre-x ≈ 175, Lottie centre-x ≈ 255  (side-by-side, touching)
+  // Luna   rests bottom-left: x≈130, feet at y≈570, sprite 90×90
+  const COUPLE_W = 110, COUPLE_H = 210          // sprite draw size
+  const COUPLE_FEET_Y = 478                      // y where feet touch ground
+  const JONNY_CX  = 175                          // Jonny  centre-x
+  const LOTTIE_CX = 258                          // Lottie centre-x
+  const LUNA_REST_X = 130, LUNA_REST_Y = 560     // Luna arrived position (feet)
+  const LUNA_W = 90,  LUNA_H = 90               // Luna sprite draw size
+
   // --- COUPLE ---
-  // position couple under arch
-  let cx = W/2, cy = 200
   let coupleFrame
   if(postRunnerTimer < CELEB_START){
     coupleFrame = [jonny1, lottie1]
   } else {
-    // 3-frame jump cycle at ~8fps
+    // 3-frame jump cycle: stand → jump peak → land
     let celebFrame = Math.floor(postRunnerTimer / 8) % 3
-    let jonnyFrames = [jonny1, jonny2, jonny3]
-    let lottieFrames = [lottie1, lottie2, lottie3]
-    // jump bob — hop up on frame 1
-    let jumpY = celebFrame === 1 ? -18 : celebFrame === 0 ? -8 : 0
-    ctx.drawImage(jonnyFrames[celebFrame], cx - 100, cy - 60 + jumpY, 100, 140)
-    ctx.drawImage(lottieFrames[celebFrame], cx + 10,  cy - 60 + jumpY, 100, 140)
+    let jonnyFrames  = [jonny1, jonnyJump1, jonny1]
+    let lottieFrames = [lottie1, lottieJump1, lottie1]
+    // jump sprites show character airborne — shift up extra on peak frame
+    let jumpY = celebFrame === 1 ? -30 : celebFrame === 0 ? -10 : 0
+    ctx.drawImage(jonnyFrames[celebFrame],
+      JONNY_CX  - COUPLE_W/2, COUPLE_FEET_Y - COUPLE_H + jumpY, COUPLE_W, COUPLE_H)
+    ctx.drawImage(lottieFrames[celebFrame],
+      LOTTIE_CX - COUPLE_W/2, COUPLE_FEET_Y - COUPLE_H + jumpY, COUPLE_W, COUPLE_H)
     coupleFrame = null
   }
   if(coupleFrame){
-    ctx.drawImage(coupleFrame[0], cx - 100, cy - 60, 100, 140)
-    ctx.drawImage(coupleFrame[1], cx + 10,  cy - 60, 100, 140)
+    ctx.drawImage(coupleFrame[0], JONNY_CX  - COUPLE_W/2, COUPLE_FEET_Y - COUPLE_H, COUPLE_W, COUPLE_H)
+    ctx.drawImage(coupleFrame[1], LOTTIE_CX - COUPLE_W/2, COUPLE_FEET_Y - COUPLE_H, COUPLE_W, COUPLE_H)
   }
 
   // --- RING BOX ---
-  // flies from Luna's position toward couple between frames 90-150
+  // flies from Luna's rest position up to between the couple
   if(postRunnerTimer >= WALK_END){
     let ringT = Math.min(1, (postRunnerTimer - WALK_END) / (RING_END - WALK_END))
-    // ease out
-    ringT = 1 - Math.pow(1 - ringT, 3)
-    let lunaStartX = W/2, lunaStartY = H - 180
-    let ringX = lunaStartX + (cx - lunaStartX) * ringT
-    let ringY = lunaStartY + (cy - lunaStartY) * ringT - Math.sin(ringT * Math.PI) * 80
-    let ringScale = 0.6 + ringT * 0.4
+    ringT = 1 - Math.pow(1 - ringT, 3)   // ease out
+    let startX = LUNA_REST_X, startY = LUNA_REST_Y - 30
+    let endX = W/2, endY = COUPLE_FEET_Y - COUPLE_H * 0.6
+    let ringX = startX + (endX - startX) * ringT
+    let ringY = startY + (endY - startY) * ringT - Math.sin(ringT * Math.PI) * 80
+    let ringScale = 0.7 + ringT * 0.5
     ctx.save()
     ctx.translate(ringX, ringY)
     ctx.scale(ringScale, ringScale)
@@ -3270,46 +3276,32 @@ function drawPostRunnerStory(){
   }
 
   // --- LUNA ---
-  let lunaY = H - 160
-  let lunaX, lunaDir
+  // Walks in from bottom-centre, arrives at bottom-left resting spot
+  const LUNA_START_X = W/2, LUNA_START_Y = H + 60   // off-screen bottom
+  let lunaX, lunaY, lunaDir
 
   if(postRunnerTimer < WALK_END){
-    // walk toward couple — start from bottom, move up
     let t = postRunnerTimer / WALK_END
-    lunaX = W/2
-    lunaY = H - 120 - t * (H - 120 - 340)
-    lunaDir = 1
-    // walk animation
+    // ease in-out
+    let et = t < 0.5 ? 2*t*t : -1+(4-2*t)*t
+    lunaX = LUNA_START_X + (LUNA_REST_X - LUNA_START_X) * et
+    lunaY = LUNA_START_Y + (LUNA_REST_Y - LUNA_START_Y) * et
+    lunaDir = LUNA_REST_X < LUNA_START_X ? -1 : 1
     let walkStep = Math.floor(Date.now() / 160) % 2
     let walkFrame = walkStep ? lunaWalk1 : lunaWalk2
     let bob = walkStep ? -3 : 0
     ctx.save()
     ctx.translate(lunaX, lunaY + bob)
     ctx.scale(lunaDir, 1)
-    ctx.drawImage(walkFrame, -50, -65, 100, 100)
+    ctx.drawImage(walkFrame, -LUNA_W/2, -LUNA_H, LUNA_W, LUNA_H)
     ctx.restore()
   } else if(postRunnerTimer < CELEB_START){
-    // arrived — face right toward couple
-    lunaX = W/2
-    lunaY = 340   // walk end position (t=1 of walk phase)
-    lunaDir = 1
-    ctx.save()
-    ctx.translate(lunaX, lunaY)
-    ctx.scale(lunaDir, 1)
-    ctx.drawImage(luna1, -50, -65, 100, 100)
-    ctx.restore()
+    ctx.drawImage(luna1, LUNA_REST_X - LUNA_W/2, LUNA_REST_Y - LUNA_H, LUNA_W, LUNA_H)
   } else {
-    // celebrate — 3-frame dance, just use luna1 as placeholder for all 3
-    lunaX = W/2 - 10
-    lunaY = 340
-    let danceFrames = [luna1, luna1, luna1]  // swap for dance sprites when ready
+    // happy bounce in place
     let df = Math.floor(postRunnerTimer / 10) % 3
     let danceY = df === 1 ? -12 : df === 0 ? -5 : 0
-    ctx.save()
-    ctx.translate(lunaX, lunaY + danceY)
-    ctx.scale(1, 1)
-    ctx.drawImage(danceFrames[df], -50, -65, 100, 100)
-    ctx.restore()
+    ctx.drawImage(luna1, LUNA_REST_X - LUNA_W/2, LUNA_REST_Y - LUNA_H + danceY, LUNA_W, LUNA_H)
   }
 
   // --- TULIP CONFETTI ---
