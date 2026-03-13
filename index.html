@@ -445,7 +445,7 @@ startGame()
 }
 
 
-if(state === "gardenstory" && !storyJustEntered){
+if(state === "gardenstory" && !storyJustEntered && !gardenStorySpacePressedLastFrame){
 fadeOutStartMusic(()=>{
 state = "garden"
 generateDigSpots()
@@ -453,7 +453,7 @@ digTimer = 0
 })
 }
 
-if(state === "coastalstory" && !storyJustEntered){
+if(state === "coastalstory" && !storyJustEntered && !coastalStorySpacePressedLastFrame){
 state = "coastal"
 luna.x = 50
 luna.y = 500
@@ -464,7 +464,7 @@ bones = []
 initCoastalPlatforms()
 }
 
-if(state === "villagestory" && !storyJustEntered){
+if(state === "villagestory" && !storyJustEntered && !villageStorySpacePressedLastFrame){
 state = "village"
 scroll = 0
 obstacles = []
@@ -474,7 +474,7 @@ luna.x = 100
 luna.y = 540
 }
 
-if(state === "altarstory" && !storyJustEntered){
+if(state === "altarstory" && !storyJustEntered && !altarStorySpacePressedLastFrame){
 state = "altar"
 // initialise runner for fresh entry
 runnerLane = 1
@@ -1396,7 +1396,7 @@ life: 20
 
 if(keys[" "] || touchJump && luna.vy==0){
 luna.vy=-8
-energy = Math.max(0, energy - 0.5)
+energy = Math.max(0, energy - 0.25)
 }
 
 /* gravity */
@@ -1762,7 +1762,7 @@ o.hit = true
 
 if(keys[" "]|| touchJump && luna.y===540){
 luna.vy=-10
-energy = Math.max(0, energy - 0.5)
+energy = Math.max(0, energy - 0.25)
 }
 
 luna.vy+=0.5
@@ -2080,7 +2080,17 @@ function spawnFlowerRow(startY){
   let canTriple = tripleRowCooldown <= 0
   let count = Math.random() < 0.35 ? 1 : (canTriple && Math.random() < 0.18) ? 3 : 2
   if(count === 3) tripleRowCooldown = AISLE_FLOWER_INTERVAL * 8  // ~6 rows gap minimum
-  let witheredSlot = Math.random() < 0.15 ? Math.floor(Math.random() * count) : -1
+
+  // find lanes already occupied by nearby flowers (within 80px) to avoid withered overlapping healthy
+  let nearbyLanes = new Set(
+    runnerFlowers.filter(f => !f.withered && Math.abs(f.y - startY) < 80).map(f => f.lane)
+  )
+  // only allow withered in a lane that has no nearby healthy flower
+  let witheredCandidates = lanes.slice(0, count).map((l, i) => i).filter(i => !nearbyLanes.has(lanes[i]))
+  let witheredSlot = (Math.random() < 0.15 && witheredCandidates.length > 0)
+    ? witheredCandidates[Math.floor(Math.random() * witheredCandidates.length)]
+    : -1
+
   for(let i = 0; i < count; i++){
     runnerFlowers.push({
       lane: lanes[i],
@@ -2299,7 +2309,7 @@ if(rhythmState === "walking"){
   runnerProgress = Math.min(1, runnerProgress + 1 / AISLE_DURATION)
 
   // scroll tiles
-  runnerTileOffset = (runnerTileOffset + AISLE_SCROLL_SPEED) % H
+  runnerTileOffset += AISLE_SCROLL_SPEED  // accumulate raw; draw loop applies % tileH
 
   // spawn flowers randomly in lanes
   runnerFlowerTimer++
@@ -3257,8 +3267,10 @@ fadeAlpha = 1
 // switch state and start fading back in
 state = fadeTarget
 storyJustEntered = true
+if(fadeTarget === "gardenstory")  gardenStorySpacePressedLastFrame  = true
+if(fadeTarget === "coastalstory") coastalStorySpacePressedLastFrame = true
 if(fadeTarget === "villagestory") villageStorySpacePressedLastFrame = true
-if(fadeTarget === "altarstory") altarStorySpacePressedLastFrame = true
+if(fadeTarget === "altarstory")   altarStorySpacePressedLastFrame   = true
 fadeDir = -1
 fadeTarget = ""
 }
