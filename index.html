@@ -182,6 +182,7 @@ const isMobile = "ontouchstart" in window
 const startMusic = new Audio("startscreenmusic.mp3")
 startMusic.loop = true
 startMusic.volume = 0
+startMusic.muted = true  // disabled for now
 
 const houses = [house1, house2, house3, house4]
 
@@ -301,6 +302,7 @@ scroll = 0
 platformsCoastal = []
 flowersCoastal = []
 bones = []
+seagullsCoastal = []
 initCoastalPlatforms()
 }
 
@@ -472,6 +474,7 @@ scroll = 0
 platformsCoastal = []
 flowersCoastal = []
 bones = []
+seagullsCoastal = []
 initCoastalPlatforms()
 }
 
@@ -535,8 +538,15 @@ for(let i = 0; i < e.touches.length; i++){
   let tx = (t.clientX - rect.left) * (W / rect.width)
   let ty = (t.clientY - rect.top)  * (H / rect.height)
 
-  // Joystick: left half of screen
-  if(tx < W / 2 && ty > H / 2){
+  // Aisle L/R buttons (altar walking)
+  if(state === "altar" && rhythmState === "walking"){
+    const aBtnR = 64, aBtnY = H - 100
+    if(Math.sqrt((tx-105)**2+(ty-aBtnY)**2) < aBtnR){ touchLeft = true }
+    if(Math.sqrt((tx-(W-105))**2+(ty-aBtnY)**2) < aBtnR){ touchRight = true }
+  }
+
+  // Joystick: left half of screen (not aisle)
+  if(tx < W / 2 && ty > H / 2 && !(state === "altar" && rhythmState === "walking")){
     joystick.active = true
     let dx = tx - joystick.x
     let dy = ty - joystick.y
@@ -645,24 +655,29 @@ if(state === "garden" && digTimer > 0){
 frame = lunaDig
 }
 
-/* JUMP / FALL / LAND (coastal/village only) */
+/* ── COASTAL / VILLAGE: jump, fall, land, or run by default ── */
 
-else if((state === "coastal" || state === "village") && landTimer > 0){
-// just landed — brief lunaDown2 flash
-frame = lunaDown2
-bob = 0
-}
+else if(state === "coastal" || state === "village"){
 
-else if((state === "coastal" || state === "village") && luna.vy < 0){
-// rising — jump held = lunaJump1, released = lunaJump2
-frame = jumpHeld ? lunaJump1 : lunaJump2
-bob = 0
-}
+  if(landTimer > 0){
+    // just landed — brief lunaDown2 flash
+    frame = lunaDown2
+    bob = 0
+  } else if(luna.vy < 0){
+    // rising — jump held = lunaJump1, released = lunaJump2
+    frame = jumpHeld ? lunaJump1 : lunaJump2
+    bob = 0
+  } else if(luna.vy > 1.5){
+    // falling off a cliff (> 1.5 distinguishes airborne from the tiny gravity tick on ground)
+    frame = lunaDown1
+    bob = 0
+  } else {
+    // grounded — always run (luna1 / luna2 alternating), no key press needed
+    let step = Math.floor(Date.now() / 160) % 2
+    frame = step ? luna1 : luna2
+    bob = step ? -2 : 0
+  }
 
-else if((state === "coastal" || state === "village") && luna.vy > 0){
-// falling
-frame = lunaDown1
-bob = 0
 }
 
 /* WALKING UP (garden up key, or aisle runner) */
@@ -684,12 +699,9 @@ frame = step ? lunaFrontWalk1 : lunaFrontWalk2
 bob = step ? -2 : 0
 }
 
-/* RUNNING LEFT/RIGHT — always animate in coastal/village, or when key held */
+/* RUNNING LEFT/RIGHT in garden (key held) */
 
-else if(
-  keys["ArrowLeft"] || keys["ArrowRight"] || touchLeft || touchRight ||
-  state === "coastal" || state === "village"
-){
+else if(keys["ArrowLeft"] || keys["ArrowRight"] || touchLeft || touchRight){
 let step = Math.floor(Date.now()/160) % 2
 frame = step ? luna1 : luna2
 bob = step ? -2 : 0
@@ -714,7 +726,7 @@ ctx.restore()
 
 function drawStart(){
 
-if(startMusic.paused){
+if(false && startMusic.paused){  // startMusic disabled
 startMusic.play().catch(()=>{})
 fadeInStartMusic()
 }
@@ -756,6 +768,27 @@ if(state === "altar" && rhythmState === "minigame"){
 
 if(state !== "garden" && state !== "coastal" && state !== "village" && state !== "altar") return
 
+/* ── AISLE: simple L / R arrow buttons ── */
+if(state === "altar" && rhythmState === "walking"){
+  const aBtnR = 44, aBtnY = H - 100
+  const aBtnLX = 105, aBtnRX = W - 105
+  const drawABtn = (cx, cy, dir, pressed) => {
+    ctx.globalAlpha = 0.2; ctx.fillStyle = "#000"
+    ctx.beginPath(); ctx.arc(cx+3,cy+3,aBtnR,0,Math.PI*2); ctx.fill()
+    ctx.globalAlpha = pressed ? 0.55 : 0.35; ctx.fillStyle = "#6a3090"
+    ctx.beginPath(); ctx.arc(cx,cy,aBtnR,0,Math.PI*2); ctx.fill()
+    ctx.globalAlpha = 0.7; ctx.strokeStyle = "#ae84c8"; ctx.lineWidth = 2.5
+    ctx.beginPath(); ctx.arc(cx,cy,aBtnR,0,Math.PI*2); ctx.stroke()
+    ctx.globalAlpha = 0.9; ctx.fillStyle = "#fff"; ctx.beginPath()
+    if(dir==="left"){ ctx.moveTo(cx-16,cy); ctx.lineTo(cx+10,cy-16); ctx.lineTo(cx+10,cy+16) }
+    else             { ctx.moveTo(cx+16,cy); ctx.lineTo(cx-10,cy-16); ctx.lineTo(cx-10,cy+16) }
+    ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1
+  }
+  drawABtn(aBtnLX, aBtnY, "left",  touchLeft)
+  drawABtn(aBtnRX, aBtnY, "right", touchRight)
+  return
+}
+
 // on the pale aisle background, use darker tones; elsewhere use white
 let isAisle = (state === "altar")
 let jRingStroke  = isAisle ? "rgba(80,50,120,0.4)"  : "rgba(255,255,255,0.35)"
@@ -796,25 +829,31 @@ ctx.strokeStyle = jNubStroke
 ctx.lineWidth = 1.5
 ctx.stroke()
 
-/* --- ACTION BUTTON (hidden on altar walking level) --- */
+/* --- ACTION BUTTON: heart shaped --- */
 if(state !== "altar"){
 let ax = actionButton.x, ay = actionButton.y, ar = actionButton.r
-
+let s = ar * 0.62
+ctx.save()
+ctx.translate(ax, ay - s * 0.08)
 ctx.beginPath()
-ctx.arc(ax, ay, ar, 0, Math.PI * 2)
-ctx.fillStyle = "rgba(255,255,255,0.15)"
+ctx.moveTo(0, s*0.3)
+ctx.bezierCurveTo(-s*0.1,-s*0.1,-s,-s*0.1,-s,s*0.4)
+ctx.bezierCurveTo(-s,s*0.9,0,s*1.3,0,s*1.3)
+ctx.bezierCurveTo(0,s*1.3,s,s*0.9,s,s*0.4)
+ctx.bezierCurveTo(s,-s*0.1,s*0.1,-s*0.1,0,s*0.3)
+ctx.closePath()
+ctx.fillStyle = "rgba(255,140,170,0.35)"
 ctx.fill()
-ctx.strokeStyle = "rgba(255,255,255,0.55)"
+ctx.strokeStyle = "rgba(255,200,220,0.75)"
 ctx.lineWidth = 2
 ctx.stroke()
-
-// label inside action button
-ctx.fillStyle = "rgba(255,255,255,0.8)"
+ctx.restore()
+ctx.fillStyle = "rgba(255,255,255,0.9)"
 ctx.font = "bold 16px sans-serif"
 ctx.textAlign = "center"
 ctx.textBaseline = "middle"
 let label = (state === "garden" && nearDigSpot) ? "dig" : "jump"
-ctx.fillText(label, ax, ay)
+ctx.fillText(label, ax, ay + ar * 0.12)
 ctx.textBaseline = "alphabetic"
 }
 
@@ -880,7 +919,7 @@ ctx.fillRect(0, 0, W, UI_H)
 
 let iconS = 44
 let iconX = 12
-let iconY = (UI_H - iconS) / 2
+let iconY = Math.round((UI_H - iconS) / 2)
 if(hasRing){
   ctx.drawImage(ringbox, iconX, iconY, iconS, iconS)
 }
@@ -890,7 +929,7 @@ if(hasRing){
 let barW = 160, barH = 22, barR = barH/2
 let barPad = 14                          // gap from right edge
 let barX = W - barPad - barW
-let barY = (UI_H - barH) / 2
+let barY = Math.round((UI_H - barH) / 2)
 
 // white pill background
 ctx.fillStyle = "white"
@@ -921,17 +960,17 @@ ctx.restore()
 
 /* FLOWER COUNTER — centred in gap between ringbox and energy bar */
 
-let tIconS = 46
+let tIconS = 36
 let gapLeft  = iconX + iconS + 4         // right edge of ring icon zone
 let gapRight = barX - 4                  // left edge of bar zone
 let gapCX    = (gapLeft + gapRight) / 2  // centre of the gap
 let tIconX   = gapCX - tIconS/2 - 22    // tulip left edge (icon + text together)
-let tIconY   = (UI_H - tIconS) / 2
+let tIconY   = Math.round((UI_H - tIconS) / 2)
 
 ctx.drawImage(tulip, tIconX, tIconY, tIconS, tIconS)
 
 ctx.fillStyle = "#5a3870"
-ctx.font = "bold 24px 'DeliusSwash', sans-serif"
+ctx.font = "bold 20px 'DeliusSwash', sans-serif"
 ctx.textAlign = "left"
 ctx.textBaseline = "middle"
 ctx.fillText("x" + flowers, tIconX + tIconS + 4, UI_H/2)
@@ -1257,6 +1296,20 @@ drawLuna()
 let bones=[]
 let flowersCoastal=[]
 let platformsCoastal=[]
+let seagullsCoastal=[]
+
+function spawnCoastalSeagull(){
+  if(seagullsCoastal.length > 0 && seagullsCoastal[seagullsCoastal.length-1].x > W - 200) return
+  // pick a real surface: either ground or a visible platform
+  let surfaces = [510] // ground y
+  platformsCoastal.forEach(p => { if(p.x > 0 && p.x < W + 200) surfaces.push(p.y) })
+  let surfaceY = surfaces[Math.floor(Math.random() * surfaces.length)]
+  // seagull sprite is 80x70 — feet land ~30px below surfaceY top, so draw at surfaceY - 100
+  let drawY = surfaceY - 100
+  // pick an x somewhere on the right side of screen, scrolling in
+  let x = W + 60 + Math.random() * 150
+  seagullsCoastal.push({ x, y: drawY, surfaceY, hit: false })
+}
 let scroll=0
 
 function noOverlap(x, w){
@@ -1272,9 +1325,9 @@ let last = platformsCoastal[platformsCoastal.length-1]
 if(last && last.x > W) return
 
 // three distinct height tiers
-let lowTier   = [460, 440, 480]
-let highTier  = [320, 350, 370, 390]
-let skyTier   = [270, 290, 310]
+let lowTier   = [320, 340, 360]
+let highTier  = [210, 230, 250, 270]
+let skyTier   = [150, 165, 180]
 
 let count = 1 + Math.floor(Math.random()*4)
 let startX = W + 80
@@ -1314,22 +1367,30 @@ continue
 let p = { x: startX, y: nextY, w: width }
 platformsCoastal.push(p)
 
-// flower and bone at different x positions so they never stack
+// flower and bone on platform — vary y slightly above platform top
 let hasFlower = Math.random() < 0.6
 let hasBone   = Math.random() < 0.35
 
 if(hasFlower){
 flowersCoastal.push({
 x: p.x + p.w * 0.25,
-y: p.y - 55
+y: p.y - 55 + Math.floor((Math.random()-0.5) * 24)
 })
 }
 
 if(hasBone){
 bones.push({
 x: p.x + p.w * (hasFlower ? 0.7 : 0.5),
-y: p.y - 55
+y: p.y - 55 + Math.floor((Math.random()-0.5) * 24)
 })
+}
+
+// ground-level collectibles — vary y slightly around ground height
+if(Math.random() < 0.45){
+flowersCoastal.push({ x: startX + Math.random() * 120, y: 455 + Math.floor((Math.random()-0.5) * 20) })
+}
+if(Math.random() < 0.3){
+bones.push({ x: startX + Math.random() * 120, y: 455 + Math.floor((Math.random()-0.5) * 20) })
 }
 
 startX += width + 80 + Math.floor(Math.random()*80)
@@ -1346,12 +1407,12 @@ bones = []
 
 // hand-crafted first few platforms across both tiers
 let starts = [
-{ x: 200, y: 460, w: 128 },
-{ x: 380, y: 370, w: 96  },
-{ x: 530, y: 450, w: 192 },
-{ x: 780, y: 340, w: 128 },
-{ x: 960, y: 280, w: 96  },
-{ x: 1110, y: 460, w: 128 },
+{ x: 200, y: 340, w: 128 },
+{ x: 380, y: 240, w: 96  },
+{ x: 530, y: 320, w: 192 },
+{ x: 780, y: 210, w: 128 },
+{ x: 960, y: 160, w: 96  },
+{ x: 1110, y: 340, w: 128 },
 ]
 
 starts.forEach((p, i) => {
@@ -1419,6 +1480,14 @@ luna.y+=luna.vy
 platformsCoastal = platformsCoastal.filter(p => p.x + p.w > -200)
 flowersCoastal = flowersCoastal.filter(f => f.x > -20)
 bones = bones.filter(b => b.x > -20)
+seagullsCoastal = seagullsCoastal.filter(s => s.x > -100)
+seagullsCoastal.forEach(s => {
+  s.x -= 3
+  let sCentreY = s.y + 35
+  if(Math.abs(s.x - luna.x) < 40 && Math.abs(sCentreY - luna.y) < 45 && !s.hit){
+    energy -= 10; s.hit = true
+  }
+})
 
 
 /* platform collision */
@@ -1435,8 +1504,10 @@ luna.y < p.y + 20 &&
 luna.vy >= 0
 ){
 luna.y = p.y
-if(luna.vy > 0) landTimer = LAND_FRAMES
+if(luna.vy > 1.5) landTimer = LAND_FRAMES
 luna.vy = 0
+luna.onGround = true
+onPlatform = true
 }
 })
 
@@ -1446,8 +1517,11 @@ let groundY=510
 
 if(!onPlatform && luna.y>groundY){
 luna.y=groundY
-if(luna.vy > 0) landTimer = LAND_FRAMES
+if(luna.vy > 1.5) landTimer = LAND_FRAMES
 luna.vy=0
+luna.onGround = true
+} else if(!onPlatform){
+luna.onGround = false
 }
 
 /* scrolling */
@@ -1457,6 +1531,7 @@ scroll+=3
 /* spawn platforms */
 
 if(Math.random()<0.03) spawnPlatformCluster()
+if(Math.random()<0.008) spawnCoastalSeagull()
 
 /* move platforms */
 
@@ -1470,7 +1545,7 @@ flowersCoastal.forEach(f=>{
 
 f.x-=3
 
-if(Math.abs(f.x-luna.x)<20 && Math.abs(f.y-luna.y)<25){
+if(Math.abs(f.x-luna.x)<20 && Math.abs(f.y-luna.y)<80){
 flowers++
 f.x=-100
 }
@@ -1483,7 +1558,7 @@ bones.forEach(b=>{
 
 b.x-=3
 
-if(Math.abs(b.x-luna.x)<20 && Math.abs(b.y-luna.y)<25){
+if(Math.abs(b.x-luna.x)<20 && Math.abs(b.y-luna.y)<80){
 energy=Math.min(100,energy+30)
 bonesEaten++
 b.x=-100
@@ -1621,6 +1696,12 @@ b.y-16,
 })
 
 
+/* SEAGULLS */
+
+seagullsCoastal.forEach(s=>{
+ctx.drawImage(seagull, s.x, s.y, 80, 70)
+})
+
 /* LUNA */
 
 drawLuna()
@@ -1647,7 +1728,7 @@ if(W - last.x < minGap) return
 }
 
 const OBSTACLE_YS = [450, 470, 490]
-let oType = Math.floor(Math.random()*3)
+let oType = Math.floor(Math.random()*2)  // 0=flowerpot, 1=crate only
 obstacles.push({
 x:W+100,
 y: OBSTACLE_YS[Math.floor(Math.random()*3)],
@@ -1712,7 +1793,7 @@ f.x -= 4
 
 flowersVillage.forEach(f=>{
 
-if(Math.abs(f.x-luna.x)<20 && Math.abs(f.y-luna.y)<25){
+if(Math.abs(f.x-luna.x)<20 && Math.abs(f.y-luna.y)<80){
 
 flowers++
 f.x = -100
@@ -1747,7 +1828,7 @@ bonesVillage.forEach(b=>{
 
 b.x -= 4
 
-if(Math.abs(b.x-luna.x)<25 && Math.abs(b.y-luna.y)<40){
+if(Math.abs(b.x-luna.x)<25 && Math.abs(b.y-luna.y)<80){
 
 energy = Math.min(100, energy + 30)
 bonesEaten++
@@ -1780,10 +1861,13 @@ energy = Math.max(0, energy - 0.25)
 luna.vy+=0.5
 luna.y+=luna.vy
 
-if(luna.y>540){
+if(luna.y>=540){
 luna.y=540
-if(luna.vy > 0) landTimer = LAND_FRAMES
+if(luna.vy > 1.5) landTimer = LAND_FRAMES
 luna.vy=0
+luna.onGround = true
+} else {
+luna.onGround = false
 }
 
 if(scroll > 5400 && fadeDir === 0){
@@ -2099,7 +2183,7 @@ function spawnFlowerRow(startY){
   )
   // only allow withered in a lane that has no nearby healthy flower
   let witheredCandidates = lanes.slice(0, count).map((l, i) => i).filter(i => !nearbyLanes.has(lanes[i]))
-  let witheredSlot = (Math.random() < 0.15 && witheredCandidates.length > 0)
+  let witheredSlot = (Math.random() < 0.40 && witheredCandidates.length > 0)
     ? witheredCandidates[Math.floor(Math.random() * witheredCandidates.length)]
     : -1
 
@@ -3029,6 +3113,7 @@ scroll = 0
 platformsCoastal = []
 flowersCoastal = []
 bones = []
+seagullsCoastal = []
 initCoastalPlatforms()
 }
 
