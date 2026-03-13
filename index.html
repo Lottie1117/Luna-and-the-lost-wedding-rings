@@ -457,11 +457,10 @@ const storyBtnHit = x > STORY_BTN_X - STORY_BTN_MARGIN &&
 
 if(state === "gardenstory" && !storyJustEntered && storyBtnHit){
 gardenStorySpacePressedLastFrame = true
-fadeOutStartMusic(()=>{
 state = "garden"
 generateDigSpots()
 digTimer = 0
-})
+fadeOutStartMusic(null)
 }
 
 if(state === "coastalstory" && !storyJustEntered && storyBtnHit){
@@ -2917,14 +2916,19 @@ clearInterval(fade)
 
 function fadeOutStartMusic(callback){
 
+// Guard against iOS audio restrictions — if not playing, just call callback
+if(!startMusic || startMusic.paused){
+if(callback) callback()
+return
+}
+
 let fade = setInterval(()=>{
 
 if(startMusic.volume > 0.02){
-startMusic.volume -= 0.02
+try{ startMusic.volume -= 0.02 }catch(e){}
 }else{
 clearInterval(fade)
-startMusic.pause()
-startMusic.currentTime = 0
+try{ startMusic.pause(); startMusic.currentTime = 0 }catch(e){}
 if(callback) callback()
 }
 
