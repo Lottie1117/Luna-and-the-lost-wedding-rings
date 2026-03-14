@@ -159,6 +159,7 @@ const grassplatform    = loadImage("grassplatform.png")
 const doublegrassplatform = loadImage("doublegrassplatform.png")
 const arch             = loadImage("arch.png")
 const aisleTile        = loadImage("aisletile.png")
+const winScreen        = loadImage("winscreen.png")
 
 const canvas = document.getElementById("game")
 const ctx = canvas.getContext("2d")
@@ -248,7 +249,7 @@ active: false
 const actionButton = {
 x: W - 90,
 y: H - 100,
-r: 36
+r: 46
 }
 
 const startButton = {
@@ -357,18 +358,21 @@ let x = (e.clientX - rect.left) * (W / rect.width)
 let y = (e.clientY - rect.top) * (H / rect.height)
 
 if(state === "win" &&
-x > W/2-100 && x < W/2+100 &&
-y > 400 && y < 450){
+x > W/2-110 && x < W/2+110 &&
+y > 416 && y < 492){
 restartGame()
 }
 
 if(state === "win" &&
 x > W/2-120 && x < W/2+120 &&
-y > 465 && y < 515){
-// confetti cannon!
+y > 484 && y < 560){
+// confetti cannon! - sides AND top
 for(let i=0;i<40;i++){
   let side = Math.random() < 0.5 ? 0 : W
   confetti.push({ x:side, y:H*0.2+Math.random()*H*0.6, vx:(side===0?1:-1)*(Math.random()*6+3), vy:(Math.random()-0.5)*6, rot:Math.random()*Math.PI*2, rotV:(Math.random()-0.5)*0.25, isTulip:true })
+}
+for(let i=0;i<25;i++){
+  confetti.push({ x:Math.random()*W, y:0, vx:(Math.random()-0.5)*5, vy:Math.random()*5+2, rot:Math.random()*Math.PI*2, rotV:(Math.random()-0.5)*0.25, isTulip:true })
 }
 }
 
@@ -508,17 +512,20 @@ luna.y = H - 160
 
 
 if(state === "win" &&
-x > W/2-100 && x < W/2+100 &&
-y > 400 && y < 450){
+x > W/2-110 && x < W/2+110 &&
+y > 416 && y < 492){
 restartGame()
 }
 
 if(state === "win" &&
 x > W/2-120 && x < W/2+120 &&
-y > 465 && y < 515){
+y > 484 && y < 560){
 for(let i=0;i<40;i++){
   let side = Math.random() < 0.5 ? 0 : W
   confetti.push({ x:side, y:H*0.2+Math.random()*H*0.6, vx:(side===0?1:-1)*(Math.random()*6+3), vy:(Math.random()-0.5)*6, rot:Math.random()*Math.PI*2, rotV:(Math.random()-0.5)*0.25, isTulip:true })
+}
+for(let i=0;i<25;i++){
+  confetti.push({ x:Math.random()*W, y:0, vx:(Math.random()-0.5)*5, vy:Math.random()*5+2, rot:Math.random()*Math.PI*2, rotV:(Math.random()-0.5)*0.25, isTulip:true })
 }
 }
 
@@ -741,6 +748,34 @@ startScreen,
 W,
 H
 )
+
+// "Let's Play!" button using story button style
+let bw = 220, bh = 56, bx = W/2 - bw/2, by = 617
+// pill shadow
+ctx.globalAlpha = 0.25
+ctx.fillStyle = "#000"
+ctx.beginPath()
+ctx.roundRect(bx+4, by+4, bw, bh, 28)
+ctx.fill()
+// white background
+ctx.globalAlpha = 1
+ctx.fillStyle = "#fff"
+ctx.beginPath()
+ctx.roundRect(bx, by, bw, bh, 28)
+ctx.fill()
+// pill stroke
+ctx.strokeStyle = "#ae84c8"
+ctx.lineWidth = 3
+ctx.beginPath()
+ctx.roundRect(bx, by, bw, bh, 28)
+ctx.stroke()
+// label
+ctx.fillStyle = "#ae84c8"
+ctx.font = "bold 22px 'DeliusSwash', sans-serif"
+ctx.textAlign = "center"
+ctx.textBaseline = "middle"
+ctx.fillText("Let's Play! ✦", W/2, by + bh/2)
+ctx.textBaseline = "alphabetic"
 }
 
 /* ENERGY */
@@ -835,9 +870,12 @@ ctx.stroke()
 /* --- ACTION BUTTON: heart shaped --- */
 if(state !== "altar"){
 let ax = actionButton.x, ay = actionButton.y, ar = actionButton.r
-let s = ar * 0.62
+let s = ar * 0.68
+// heart visual centre is roughly at (0, s*0.55) relative to the translate point
+// translate so the heart is centred on (ax, ay)
+let heartOffsetY = s * 0.55  // distance from translate origin to heart visual centre
 ctx.save()
-ctx.translate(ax, ay - s * 0.08)
+ctx.translate(ax, ay - heartOffsetY)
 ctx.beginPath()
 ctx.moveTo(0, s*0.3)
 ctx.bezierCurveTo(-s*0.1,-s*0.1,-s,-s*0.1,-s,s*0.4)
@@ -850,14 +888,16 @@ ctx.fill()
 ctx.strokeStyle = "rgba(255,200,220,0.75)"
 ctx.lineWidth = 2
 ctx.stroke()
-ctx.restore()
+// label centred inside heart: heart spans from ~-s*0.1 (top) to s*1.3 (bottom)
+// visual centre ≈ midpoint = s*0.6
 ctx.fillStyle = "rgba(255,255,255,0.9)"
 ctx.font = "bold 16px sans-serif"
 ctx.textAlign = "center"
 ctx.textBaseline = "middle"
-let label = (state === "garden" && nearDigSpot) ? "dig" : "jump"
-ctx.fillText(label, ax, ay + ar * 0.12)
+let label = showRingPopup ? "Next" : (state === "garden" && nearDigSpot) ? "dig" : "jump"
+ctx.fillText(label, 0, s * 0.6)
 ctx.textBaseline = "alphabetic"
+ctx.restore()
 }
 
 }
@@ -2166,7 +2206,9 @@ let rhythmState = "walking"
 // carpet: pew 15% | stone 5% | carpet 60% | stone 5% | pew 15%
 // lanes sit within carpet: left=33%, mid=50%, right=67% of canvas
 const AISLE_LANE_XS = [W*0.333, W*0.5, W*0.667]  // 3 lanes inside carpet
-const AISLE_SCROLL_SPEED = 4          // px per frame tile scrolls
+const AISLE_SCROLL_SPEED_START = 3    // px per frame at start
+const AISLE_SCROLL_SPEED_END   = 7    // px per frame at end
+const AISLE_SCROLL_SPEED = AISLE_SCROLL_SPEED_START  // kept for initRunnerFlowers pre-fill reference
 const AISLE_DURATION = 1800           // frames to run full aisle (30 seconds at 60fps)
 
 // Set to true to re-enable the rhythm mini-game after the runner phase
@@ -2407,8 +2449,11 @@ if(rhythmState === "walking"){
   // advance progress
   runnerProgress = Math.min(1, runnerProgress + 1 / AISLE_DURATION)
 
+  // dynamic speed — lerp from start to end speed as progress increases
+  let currentSpeed = AISLE_SCROLL_SPEED_START + (AISLE_SCROLL_SPEED_END - AISLE_SCROLL_SPEED_START) * runnerProgress
+
   // scroll tiles
-  runnerTileOffset += AISLE_SCROLL_SPEED  // accumulate raw; draw loop applies % tileH
+  runnerTileOffset += currentSpeed  // accumulate raw; draw loop applies % tileH
 
   // spawn flowers randomly in lanes
   runnerFlowerTimer++
@@ -2420,7 +2465,7 @@ if(rhythmState === "walking"){
 
   // move flowers down and collect
   runnerFlowers.forEach(f => {
-    f.y += AISLE_SCROLL_SPEED
+    f.y += currentSpeed
     f.x = AISLE_LANE_XS[f.lane]
   })
 
@@ -2864,8 +2909,13 @@ if(allDone && rhythmFinishTimer > 0){
 
 function drawWin(){
 
-ctx.fillStyle="#fff9f0"
-ctx.fillRect(0,0,W,H)
+// Draw win screen background image instead of cream fill
+if(winScreen && winScreen.complete && winScreen.naturalWidth > 0){
+  ctx.drawImage(winScreen, 0, 0, W, H)
+} else {
+  ctx.fillStyle="#fff9f0"
+  ctx.fillRect(0,0,W,H)
+}
 
 // tulip confetti
 confetti.forEach(c=>{
@@ -2882,45 +2932,60 @@ confetti.forEach(c=>{
   }
 })
 
+// Content positioned to align with the blank space in the win screen image
+// (blank space appears roughly in the middle of the image)
+let contentY = 270
+
 ctx.fillStyle="#333"
 ctx.textAlign="center"
-ctx.font="28px 'DeliusSwash', sans-serif"
-ctx.fillText("Congratulations Jonny & Lottie!",W/2,200)
-
-ctx.font="16px 'DeliusSwash', sans-serif"
-ctx.fillText("Luna delivered the rings! 💍",W/2,240)
+ctx.font="20px 'DeliusSwash', sans-serif"
+ctx.fillText("Luna delivered the rings! 💍",W/2, contentY)
 
 let exploringScore = flowers * 10 + Math.round(energy) + bonesEaten * 5
 let totalScore = exploringScore
 
-ctx.font="14px 'DeliusSwash', sans-serif"
+ctx.font="17px 'DeliusSwash', sans-serif"
 ctx.fillStyle="#555"
-let ly = 285
+let ly = contentY + 38
 ctx.fillText("🌷 Flowers collected: " + flowers + "  ×10 = " + (flowers*10) + " pts", W/2, ly)
-ctx.fillText("⚡ Energy remaining: " + Math.round(energy) + "% = " + Math.round(energy) + " pts", W/2, ly+24)
-ctx.fillText("🦴 Gravy bones eaten: " + bonesEaten + "  ×5 = " + (bonesEaten*5) + " pts", W/2, ly+48)
+ctx.fillText("⚡ Energy remaining: " + Math.round(energy) + "% = " + Math.round(energy) + " pts", W/2, ly+28)
+ctx.fillText("🦴 Gravy bones eaten: " + bonesEaten + "  ×5 = " + (bonesEaten*5) + " pts", W/2, ly+56)
 
-ctx.font="bold 22px 'DeliusSwash', sans-serif"
+ctx.font="bold 26px 'DeliusSwash', sans-serif"
 ctx.fillStyle="#e05cb0"
-ctx.fillText("Total score: " + totalScore, W/2, ly+90)
+ctx.fillText("Total score: " + totalScore, W/2, ly+98)
 
-// play again button
-ctx.fillStyle="#e05cb0"
-ctx.beginPath()
-ctx.roundRect(W/2-100, ly+115, 200, 50, 25)
-ctx.fill()
-ctx.fillStyle="white"
-ctx.font="bold 16px 'DeliusSwash', sans-serif"
-ctx.fillText("Play again 🐾", W/2, ly+146)
+// Helper to draw a story-style pill button
+function drawWinButton(cx, by, bw, bh, fillColor, strokeColor, label, labelColor, fontSize){
+  let bx = cx - bw/2
+  ctx.globalAlpha = 0.25
+  ctx.fillStyle = "#000"
+  ctx.beginPath()
+  ctx.roundRect(bx+4, by+4, bw, bh, 28)
+  ctx.fill()
+  ctx.globalAlpha = 1
+  ctx.fillStyle = fillColor
+  ctx.beginPath()
+  ctx.roundRect(bx, by, bw, bh, 28)
+  ctx.fill()
+  ctx.strokeStyle = strokeColor
+  ctx.lineWidth = 3
+  ctx.beginPath()
+  ctx.roundRect(bx, by, bw, bh, 28)
+  ctx.stroke()
+  ctx.fillStyle = labelColor
+  ctx.font = "bold " + (fontSize || 20) + "px 'DeliusSwash', sans-serif"
+  ctx.textAlign = "center"
+  ctx.textBaseline = "middle"
+  ctx.fillText(label, cx, by + bh/2)
+  ctx.textBaseline = "alphabetic"
+}
 
-// confetti cannon button
-ctx.fillStyle="#f9c74f"
-ctx.beginPath()
-ctx.roundRect(W/2-120, ly+180, 240, 50, 25)
-ctx.fill()
-ctx.fillStyle="#333"
-ctx.font="bold 14px 'DeliusSwash', sans-serif"
-ctx.fillText("🎉 super secret confetti cannon 🎉", W/2, ly+211)
+// Play again button (story style: white bg, purple stroke, purple text)
+drawWinButton(W/2, ly+118, 220, 56, "#fff", "#ae84c8", "Play again 🐾", "#ae84c8", 20)
+
+// Confetti cannon button (slightly pinker: light pink bg, pink stroke, pink text)
+drawWinButton(W/2, ly+186, 240, 56, "#fff0f5", "#d96fa0", "🎉 Secret Confetti Button 🎉", "#d96fa0", 15)
 
 }
 
@@ -3028,18 +3093,26 @@ if(callback) callback()
 function startGame(){
 state = "controls"
 controlsTimer = 300
+tapToContinue = false
+controlsEntryFrame = 0
 }
+
+let controlsEntryFrame = 0   // frames since entering controls, to prevent instant advance
 
 function updateControls(){
 
-if(controlsTimer > 0){
-controlsTimer--
-}
+controlsEntryFrame++
 
-if(controlsTimer === 0){
-state = "gardenstory"
-storyJustEntered = true
-gardenStorySpacePressedLastFrame = true
+// require at least 10 frames before tap can advance (prevents same tap that started game advancing controls)
+if(controlsEntryFrame < 10) return
+
+// advance on any tap/touch (tapToContinue is set in touchstart)
+// also allow space bar on desktop
+if(tapToContinue || keys[" "]){
+  tapToContinue = false
+  state = "gardenstory"
+  storyJustEntered = true
+  gardenStorySpacePressedLastFrame = true
 }
 
 }
@@ -3184,7 +3257,7 @@ function updatePostRunnerStory(){
   // 330–390 Confetti bursts from sides
   // 390+   Confetti rains, then auto-transition to win at 480
 
-  // Tulip confetti bursts from both sides starting at frame 330
+  // Tulip confetti bursts from both sides AND top starting at frame 330
   if(postRunnerTimer >= 330 && postRunnerTimer < 420){
     if(postRunnerTimer % 4 === 0){
       // left side burst
@@ -3194,6 +3267,10 @@ function updatePostRunnerStory(){
       // right side burst
       for(let i=0;i<4;i++){
         confetti.push({ x:W, y:H*0.3+Math.random()*H*0.4, vx:-(Math.random()*5+2), vy:(Math.random()-0.5)*5, rot:Math.random()*Math.PI*2, rotV:(Math.random()-0.5)*0.2, isTulip:true })
+      }
+      // top burst
+      for(let i=0;i<4;i++){
+        confetti.push({ x:Math.random()*W, y:0, vx:(Math.random()-0.5)*5, vy:Math.random()*4+2, rot:Math.random()*Math.PI*2, rotV:(Math.random()-0.5)*0.2, isTulip:true })
       }
     }
   }
@@ -3206,10 +3283,14 @@ function updatePostRunnerStory(){
 
   // auto-transition to win
   if(postRunnerTimer >= 480){
-    // seed win screen with a burst of tulip confetti
+    // seed win screen with tulip confetti from sides AND top
     for(let i=0;i<60;i++){
       let side = i < 30 ? 0 : W
       confetti.push({ x:side, y:H*0.1+Math.random()*H*0.5, vx:(side===0?1:-1)*(Math.random()*5+2), vy:(Math.random()-0.6)*5, rot:Math.random()*Math.PI*2, rotV:(Math.random()-0.5)*0.2, isTulip:true })
+    }
+    // top rain
+    for(let i=0;i<30;i++){
+      confetti.push({ x:Math.random()*W, y:0, vx:(Math.random()-0.5)*4, vy:Math.random()*4+1, rot:Math.random()*Math.PI*2, rotV:(Math.random()-0.5)*0.2, isTulip:true })
     }
     state = "win"
   }
@@ -3226,14 +3307,13 @@ function drawPostRunnerStory(){
   const CONFETTI_START = 330
 
   // Layout constants derived from mockup (canvas 420×700):
-  // Couple feet land at y≈480, sprite height 210px → top at y≈270
-  // Jonny  centre-x ≈ 175, Lottie centre-x ≈ 255  (side-by-side, touching)
-  // Luna   rests bottom-left: x≈130, feet at y≈570, sprite 90×90
-  const COUPLE_W = 110, COUPLE_H = 210          // sprite draw size
-  const COUPLE_FEET_Y = 478                      // y where feet touch ground
-  const JONNY_CX  = 175                          // Jonny  centre-x
-  const LOTTIE_CX = 258                          // Lottie centre-x
-  const LUNA_REST_X = 130, LUNA_REST_Y = 560     // Luna arrived position (feet)
+  // Mockup shows couple at ~130px wide × 165px tall, feet at ~y530
+  // Jonny  centre-x ≈ 168, Lottie centre-x ≈ 258  (side-by-side with small gap)
+  const COUPLE_W = 130, COUPLE_H = 165          // sprite draw size — natural aspect ratio
+  const COUPLE_FEET_Y = 525                      // y where feet touch ground
+  const JONNY_CX  = 168                          // Jonny  centre-x
+  const LOTTIE_CX = 262                          // Lottie centre-x
+  const LUNA_REST_X = 130, LUNA_REST_Y = 580     // Luna arrived position (feet)
   const LUNA_W = 90,  LUNA_H = 90               // Luna sprite draw size
 
   // --- COUPLE ---
@@ -3319,18 +3399,29 @@ function drawControls(){
 
 ctx.drawImage(controlsScreen, 0, 0, W, H)
 
-// countdown number in top right
-let seconds = Math.ceil(controlsTimer / 60)
-
-ctx.fillStyle = "rgba(0,0,0,0.45)"
+// "Tap to Continue" button using story button style
+let bw = 220, bh = 56, bx = W/2 - bw/2, by = H - 175
+ctx.globalAlpha = 0.25
+ctx.fillStyle = "#000"
 ctx.beginPath()
-ctx.arc(W - 36, 36, 24, 0, Math.PI*2)
+ctx.roundRect(bx+4, by+4, bw, bh, 28)
 ctx.fill()
-
-ctx.fillStyle = "white"
-ctx.font = "bold 26px sans-serif"
+ctx.globalAlpha = 1
+ctx.fillStyle = "#fff"
+ctx.beginPath()
+ctx.roundRect(bx, by, bw, bh, 28)
+ctx.fill()
+ctx.strokeStyle = "#ae84c8"
+ctx.lineWidth = 3
+ctx.beginPath()
+ctx.roundRect(bx, by, bw, bh, 28)
+ctx.stroke()
+ctx.fillStyle = "#ae84c8"
+ctx.font = "bold 22px 'DeliusSwash', sans-serif"
 ctx.textAlign = "center"
-ctx.fillText(seconds, W - 36, 44)
+ctx.textBaseline = "middle"
+ctx.fillText("Tap to Continue ✦", W/2, by + bh/2)
+ctx.textBaseline = "alphabetic"
 
 }
 
