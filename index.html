@@ -217,6 +217,7 @@ let previousState = "start"
 
 let digTimer = 0
 let nearDigSpot = false
+let hitFlashTimer = 0   // frames of red flash remaining after obstacle hit
 
 let fadeAlpha = 0
 let fadeDir = 0       // 0=none, 1=fading out, -1=fading in
@@ -377,8 +378,8 @@ for(let i=0;i<25;i++){
 }
 
 if(state === "gameover" &&
-x > W/2-100 && x < W/2+100 &&
-y > 460 && y < 510){
+x > W/2-110 && x < W/2+110 &&
+y > 468 && y < 544){
 restartGame()
 }
 
@@ -530,8 +531,8 @@ for(let i=0;i<25;i++){
 }
 
 if(state === "gameover" &&
-x > W/2-100 && x < W/2+100 &&
-y > 460 && y < 510){
+x > W/2-110 && x < W/2+110 &&
+y > 468 && y < 544){
 restartGame()
 }
 
@@ -598,7 +599,7 @@ for(let i = 0; i < e.touches.length; i++){
         touchDigFired = true
       }
     } else {
-      luna.vy = -8
+      luna.vy = -14
       jumpHeld = true
     }
   }
@@ -1148,7 +1149,6 @@ digTimer = 12
 
 // if popup is showing, wait for SPACE to continue
 
-
 if(showRingPopup){
 
 // wait for a NEW space press
@@ -1164,23 +1164,6 @@ coastalStorySpacePressedLastFrame = true
 spacePressedLastFrame = keys[" "] || touchJump || touchDig
 return
 }
-
-updateEnergy()
-
-if(keys["ArrowRight"] || touchRight){
-luna.x += 3
-luna.dir = 1
-}
-
-if(keys["ArrowLeft"] || touchLeft){
-luna.x -= 3
-luna.dir = - 1
-}
-
-luna.x = Math.max(20, Math.min(W - 20, luna.x))
-
-if(keys["ArrowUp"] || touchUp) luna.y-=3
-if(keys["ArrowDown"] || touchDown) luna.y+=3
 
 if(ringAnimTimer > 0){
 ringAnimTimer--
@@ -1198,6 +1181,24 @@ showRingPopup = true
 return
 }
 
+// only drain energy during normal garden play (not during animation or popup)
+updateEnergy()
+
+if(keys["ArrowRight"] || touchRight){
+luna.x += 3
+luna.dir = 1
+}
+
+if(keys["ArrowLeft"] || touchLeft){
+luna.x -= 3
+luna.dir = - 1
+}
+
+luna.x = Math.max(20, Math.min(W - 20, luna.x))
+
+if(keys["ArrowUp"] || touchUp) luna.y-=3
+if(keys["ArrowDown"] || touchDown) luna.y+=3
+
 digSpots.forEach((s,i)=>{
 
 let d=Math.hypot(luna.x-s.x,luna.y-s.y)
@@ -1211,6 +1212,7 @@ digTimer = 12
 /* collect a flower */
 
 flowers++
+spawnFlowerPop(s.x, s.y - 20)
 
 /* ring spot */
 
@@ -1329,6 +1331,7 @@ ctx.fillText("Let's make our way to the venue!", W/2, H/2+60)
 // hide Luna during animation and popup
 if(!showRingPopup && ringAnimTimer === 0 && popupFadeTimer === 0){
 drawLuna()
+drawDust()
 }
 
 }
@@ -1508,10 +1511,11 @@ life: 20
 
 }
 
-/* jump */
+/* jump — only when grounded */
 
-if(keys[" "] || touchJump && luna.vy==0){
-luna.vy=-8
+if((keys[" "] || touchJump) && luna.onGround){
+luna.vy = -14
+luna.onGround = false
 energy = Math.max(0, energy - 0.25)
 }
 
@@ -1590,6 +1594,7 @@ f.x-=3
 
 if(Math.abs(f.x-luna.x)<20 && Math.abs(f.y-luna.y)<80){
 flowers++
+spawnFlowerPop(f.x, f.y)
 f.x=-100
 }
 
@@ -1602,7 +1607,7 @@ bones.forEach(b=>{
 b.x-=3
 
 if(Math.abs(b.x-luna.x)<20 && Math.abs(b.y-luna.y)<80){
-energy=Math.min(100,energy+30)
+energy=Math.min(100,energy+15)
 bonesEaten++
 b.x=-100
 }
@@ -1748,6 +1753,7 @@ ctx.drawImage(seagull, s.x, s.y, 80, 70)
 /* LUNA */
 
 drawLuna()
+drawDust()
 
 }
 
@@ -1772,9 +1778,15 @@ if(W - last.x < minGap) return
 
 const OBSTACLE_YS = [450, 470, 490]
 let oType = Math.floor(Math.random()*2)  // 0=flowerpot, 1=crate only
+
+// prevent two consecutive obstacles at the same height
+let lastY = obstacles.length > 0 ? obstacles[obstacles.length-1].y : -1
+let availableYs = OBSTACLE_YS.filter(y => y !== lastY)
+if(availableYs.length === 0) availableYs = OBSTACLE_YS
+
 obstacles.push({
 x:W+100,
-y: OBSTACLE_YS[Math.floor(Math.random()*3)],
+y: availableYs[Math.floor(Math.random()*availableYs.length)],
 hit:false,
 type: oType
 })
@@ -1839,6 +1851,7 @@ flowersVillage.forEach(f=>{
 if(Math.abs(f.x-luna.x)<20 && Math.abs(f.y-luna.y)<80){
 
 flowers++
+spawnFlowerPop(f.x, f.y)
 f.x = -100
 
 }
@@ -1873,7 +1886,7 @@ b.x -= 4
 
 if(Math.abs(b.x-luna.x)<25 && Math.abs(b.y-luna.y)<80){
 
-energy = Math.min(100, energy + 30)
+energy = Math.min(100, energy + 15)
 bonesEaten++
 b.x = -100
 
@@ -1892,16 +1905,18 @@ luna.y > o.y - 20 &&
 ){
 energy -= 10
 o.hit = true
+hitFlashTimer = 20   // ~0.33s flash
 }
 
 })
 
-if(keys[" "]|| touchJump && luna.y===540){
-luna.vy=-10
+if((keys[" "] || touchJump) && luna.onGround){
+luna.vy = -14
+luna.onGround = false
 energy = Math.max(0, energy - 0.25)
 }
 
-luna.vy+=0.5
+luna.vy+=0.6
 luna.y+=luna.vy
 
 if(luna.y>=540){
@@ -2118,6 +2133,7 @@ f.y,
 
 
 drawLuna()
+drawDust()
 
 }
 
@@ -2991,34 +3007,56 @@ drawWinButton(W/2, ly+186, 240, 56, "#fff0f5", "#d96fa0", "🎉 Secret Confetti 
 
 function drawGameOver(){
 
-ctx.fillStyle="#1a1a2e"
-ctx.fillRect(0,0,W,H)
+// Use loading screen as background (same as warmup), fallback to soft pink
+if(loadingScreen.complete && loadingScreen.naturalWidth > 0){
+  ctx.drawImage(loadingScreen, 0, 0, W, H)
+} else {
+  ctx.fillStyle = "#fff0f6"
+  ctx.fillRect(0, 0, W, H)
+}
 
-ctx.fillStyle="white"
-ctx.textAlign="center"
-ctx.font="24px sans-serif"
+// Semi-transparent overlay so text is readable
+ctx.fillStyle = "rgba(255,240,248,0.72)"
+ctx.fillRect(0, 0, W, H)
 
-ctx.fillText("Oh no!",W/2,260)
-ctx.fillText("Luna took a nap",W/2,300)
-ctx.fillText("and missed the wedding!",W/2,340)
+ctx.textAlign = "center"
 
-ctx.font="16px sans-serif"
+// Main message
+ctx.font = "bold 32px 'DeliusSwash', sans-serif"
+ctx.fillStyle = "#c04080"
+ctx.fillText("Oh no! 🐾", W/2, 260)
+
+ctx.font = "20px 'DeliusSwash', sans-serif"
+ctx.fillStyle = "#5a3870"
+ctx.fillText("Luna ran out of energy", W/2, 305)
+ctx.fillText("and missed the wedding!", W/2, 335)
+
+// Score breakdown
+ctx.font = "16px 'DeliusSwash', sans-serif"
+ctx.fillStyle = "#7a5090"
 ctx.fillText("🌷 Flowers collected: " + flowers, W/2, 385)
+ctx.fillText("🦴 Gravy bones eaten: " + bonesEaten, W/2, 413)
 
-let score = flowers * 10 + Math.round(energy)
-ctx.font="bold 22px sans-serif"
-ctx.fillStyle="#aaa"
-ctx.fillText("Total score: " + score, W/2, 425)
+let score = flowers * 10 + Math.round(energy) + bonesEaten * 5
+ctx.font = "bold 24px 'DeliusSwash', sans-serif"
+ctx.fillStyle = "#e05cb0"
+ctx.fillText("Total score: " + score, W/2, 455)
 
-// restart button
-ctx.fillStyle="#555"
-ctx.beginPath()
-ctx.roundRect(W/2-100, 460, 200, 50, 25)
-ctx.fill()
-
-ctx.fillStyle="white"
-ctx.font="bold 18px sans-serif"
-ctx.fillText("Try again 🐾", W/2, 491)
+// Try again — story-style pill button
+let bw = 220, bh = 56, bx = W/2 - bw/2, by = 478
+ctx.globalAlpha = 0.25
+ctx.fillStyle = "#000"
+ctx.beginPath(); ctx.roundRect(bx+4, by+4, bw, bh, 28); ctx.fill()
+ctx.globalAlpha = 1
+ctx.fillStyle = "#fff"
+ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 28); ctx.fill()
+ctx.strokeStyle = "#ae84c8"; ctx.lineWidth = 3
+ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 28); ctx.stroke()
+ctx.fillStyle = "#ae84c8"
+ctx.font = "bold 20px 'DeliusSwash', sans-serif"
+ctx.textBaseline = "middle"
+ctx.fillText("Try again 🐾", W/2, by + bh/2)
+ctx.textBaseline = "alphabetic"
 
 }
 
@@ -3451,6 +3489,7 @@ luna.vy = 0
 fadeAlpha = 0
 fadeDir = 0
 fadeTarget = ""
+hitFlashTimer = 0
 rhythmState = "walking"
 rhythmTimer = 0
 rhythmWarmupTimer = 0
@@ -3530,6 +3569,10 @@ if(digTimer > 0){
 digTimer--
 }
 
+if(hitFlashTimer > 0){
+hitFlashTimer--
+}
+
 if(landTimer > 0){
 landTimer--
 }
@@ -3542,6 +3585,37 @@ d.life--
 
 dust = dust.filter(d=>d.life>0)
 
+}
+
+// Draw all dust particles — called from each level's draw function
+function drawDust(){
+  dust.forEach(d => {
+    let t = d.life / (d.maxLife || 20)
+    ctx.globalAlpha = t * 0.8
+    ctx.fillStyle = d.color || "rgba(255,255,255,0.6)"
+    ctx.beginPath()
+    ctx.arc(d.x, d.y, d.r || 3, 0, Math.PI * 2)
+    ctx.fill()
+  })
+  ctx.globalAlpha = 1
+}
+
+// Spawn a pink petal burst at (x, y) when a flower is collected
+function spawnFlowerPop(x, y){
+  const petalColors = ["#ff9ec8","#ffb6d9","#ff6fa8","#ffd6ec","#ff85c0"]
+  for(let i = 0; i < 10; i++){
+    let angle = (i / 10) * Math.PI * 2 + Math.random() * 0.4
+    let speed = Math.random() * 3 + 1.5
+    dust.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - 1,
+      life: 22,
+      maxLife: 22,
+      r: Math.random() * 3 + 2,
+      color: petalColors[Math.floor(Math.random() * petalColors.length)]
+    })
+  }
 }
 
 function draw(){
@@ -3597,6 +3671,13 @@ if(state==="village") drawVillage()
 if(state==="altar") drawAltar()
 
 drawFade()
+
+// red hit-flash overlay — fades out over hitFlashTimer frames
+if(hitFlashTimer > 0){
+  let alpha = (hitFlashTimer / 20) * 0.45
+  ctx.fillStyle = "rgba(220,30,30," + alpha + ")"
+  ctx.fillRect(0, 0, W, H)
+}
 
 if(
 state === "garden" ||
