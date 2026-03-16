@@ -192,6 +192,8 @@ const sfxFlower = new Audio("flower.mp3")
 sfxFlower.volume = 0.7
 const sfxBone = new Audio("bone.mp3")
 sfxBone.volume = 0.7
+const sfxDig = new Audio("digging.mp3")
+sfxDig.volume = 0.7
 
 // Clone so rapid overlapping collections don't cut each other off
 function playSound(snd){
@@ -1306,6 +1308,9 @@ if(d<30 && (keys[" "] || touchDigFired) && !s.dug){
 
 s.dug = true
 digTimer = 12
+
+/* play dig sound */
+playSound(sfxDig)
 
 /* collect a flower */
 
