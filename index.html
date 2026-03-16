@@ -183,6 +183,20 @@ ctx.scale(DPR, DPR)
 const isMobile = "ontouchstart" in window
 
 
+/* AUDIO CONTEXT FOR iPhone SUPPORT */
+let audioContextInitialized = false
+
+function initAudioContext(){
+  if(audioContextInitialized) return
+  audioContextInitialized = true
+  
+  // This enables audio playback on iPhone after user interaction
+  try {
+    const dummy = new Audio()
+    dummy.play().catch(()=>{})
+  } catch(e){}
+}
+
 const startMusic = new Audio("startscreenmusic.mp3")
 startMusic.loop = true
 startMusic.volume = 0
@@ -200,6 +214,7 @@ function playSound(snd){
   try {
     const s = snd.cloneNode()
     s.volume = snd.volume
+    s.currentTime = 0  // Reset to start
     s.play().catch(()=>{})
   } catch(e){}
 }
@@ -315,6 +330,7 @@ const keys = {}
 
 window.addEventListener("keydown", e => {
 
+initAudioContext()  // Enable audio on iPhone after first user interaction
 keys[e.key] = true
 
 // Pause toggle
@@ -498,6 +514,7 @@ for(let i = 0; i < e.touches.length; i++){
 
 canvas.addEventListener("touchstart", e => {
 
+initAudioContext()  // Enable audio on iPhone after first user interaction
 e.preventDefault()
 
 let rect = canvas.getBoundingClientRect()
