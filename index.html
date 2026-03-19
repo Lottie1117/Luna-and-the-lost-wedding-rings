@@ -108,6 +108,8 @@ const villageTiles     = loadImage("village_tiles.png")
 const sprites          = loadImage("sprites.png")
 const tileset          = loadImage("tileset.png")
 const grasstile        = loadImage("grasstile.png")
+const gardenbg         = loadImage("gardenbg.png")
+const gardentulip      = loadImage("gardentulip.png")
 const dughole          = loadImage("dughole.png")
 const flowergrass      = loadImage("flowergrass.png")
 const ringbox          = loadImage("ringbox.png")
@@ -115,6 +117,10 @@ const tulip            = loadImage("tulip.png")
 const witheredTulip    = loadImage("witheredtulip.png")
 const gravybone        = loadImage("gravybone.png")
 const sea              = loadImage("sea.png")
+const coastalTest      = loadImage("coastaltest.png")
+const coastalTest2     = loadImage("coastaltest2.png")
+const coastalTest3     = loadImage("coastaltest3.png")
+const coastalTest4     = loadImage("coastaltest4.png")
 const luna1            = loadImage("luna1.png")
 const luna2            = loadImage("luna2.png")
 const lunaDig          = loadImage("lunadig.png")
@@ -207,7 +213,7 @@ sfxFlower.volume = 0.7
 const sfxBone = new Audio("bone.mp3")
 sfxBone.volume = 0.7
 const sfxDig = new Audio("digging.mp3")
-sfxDig.volume = 0.2
+sfxDig.volume = 0.15
 
 // Clone so rapid overlapping collections don't cut each other off
 function playSound(snd){
@@ -389,8 +395,15 @@ state = "win"
 }
 
 if(e.key === "7"){
-// skip to game over screen
-state = "gameover"
+// test level for scrolling backgrounds
+state = "coastaltest"
+luna.x = 50
+luna.y = 500
+scroll = 0
+platformsCoastal = []
+flowersCoastal = []
+seagullsCoastal = []
+initCoastalPlatforms()
 }
 
 /* START GAME (SPACE) */
@@ -1357,18 +1370,14 @@ touchDigFired = false
 
 function drawGarden(){
 
-// grass background
-for(let x=0; x<W; x+=64){
-for(let y=UI_H; y<H; y+=64){
-
+// garden background - fullscreen
 ctx.drawImage(
-grasstile,
-x,y,
-64,64
+gardenbg,
+0,
+UI_H,
+W,
+H - UI_H
 )
-
-}
-}
 
 // draw flowers / holes
 digSpots.forEach(s=>{
@@ -1377,7 +1386,7 @@ digSpots.forEach(s=>{
 if(!s.dug){
 
 ctx.drawImage(
-flowergrass,
+gardentulip,
 s.x-16,
 s.y-16,
 64,
@@ -1892,6 +1901,229 @@ drawDust()
 }
 
 
+/* COASTAL TEST LEVEL - FOR TESTING SCROLLING BACKGROUNDS */
+
+function updateCoastalTest(){
+
+updateEnergy()
+
+/* movement */
+
+if(keys["ArrowRight"] || touchRight){
+luna.x+=3
+luna.dir=1
+}
+
+if(keys["ArrowLeft"] || touchLeft){
+luna.x-=3
+luna.dir=-1
+}
+
+luna.x = Math.max(20, Math.min(W - 20, luna.x))
+
+/* RUNNING DUST */
+
+if((keys["ArrowLeft"] || keys["ArrowRight"]) && luna.y >= 500){
+
+if(Math.random() < 0.25){
+
+dust.push({
+x: luna.x - luna.dir * 25,
+y: luna.y + 10,
+vx: (Math.random()-0.5)*0.5,
+vy: -0.3,
+life: 20
+})
+
+}
+
+}
+
+/* jump — grounded jump OR one mid-air double jump */
+
+let jumpPressed = (keys[" "] || touchJump)
+if(jumpPressed && !jumpPressedLastFrame){
+  if(luna.onGround){
+    luna.vy = -14
+    luna.onGround = false
+    canDoubleJump = true
+    energy = Math.max(0, energy - 0.25)
+  } else if(canDoubleJump){
+    luna.vy = -12
+    canDoubleJump = false
+    energy = Math.max(0, energy - 0.25)
+  }
+}
+jumpPressedLastFrame = jumpPressed
+
+/* gravity */
+
+luna.vy+=0.6
+luna.y+=luna.vy
+
+platformsCoastal = platformsCoastal.filter(p => p.x + p.w > -200)
+flowersCoastal = flowersCoastal.filter(f => f.x > -20)
+seagullsCoastal = seagullsCoastal.filter(s => s.x > -100)
+seagullsCoastal.forEach(s => {
+  s.x -= 3
+})
+
+/* platform collision */
+
+let onPlatform=false
+
+platformsCoastal.forEach(p=>{
+
+if(
+luna.x > p.x - 20 &&
+luna.x < p.x + p.w + 20 &&
+luna.y > p.y - 20 &&
+luna.y < p.y + 20 &&
+luna.vy >= 0
+){
+luna.y = p.y
+if(luna.vy > 1.5) landTimer = LAND_FRAMES
+luna.vy = 0
+luna.onGround = true
+canDoubleJump = false
+onPlatform = true
+}
+})
+
+/* ground collision */
+
+let groundY=510
+
+if(!onPlatform && luna.y>groundY){
+luna.y=groundY
+if(luna.vy > 1.5) landTimer = LAND_FRAMES
+luna.vy=0
+luna.onGround = true
+canDoubleJump = false
+} else if(!onPlatform){
+luna.onGround = false
+}
+
+/* scrolling */
+
+scroll+= 3
+
+/* spawn platforms */
+
+if(Math.random()<0.03) spawnPlatformCluster()
+if(Math.random()<0.008) spawnCoastalSeagull()
+
+/* move platforms */
+
+platformsCoastal.forEach(p=>{
+p.x-=3
+})
+
+/* move flowers */
+
+flowersCoastal.forEach(f=>{
+
+f.x-=3
+
+if(Math.abs(f.x-luna.x)<20 && Math.abs(f.y-luna.y)<80){
+flowers++
+spawnFlowerPop(f.x, f.y)
+playSound(sfxFlower)
+f.x=-100
+}
+
+})
+
+// No level end - infinite test level
+
+}
+
+function drawCoastalTest(){
+
+/* BACKGROUND - coastaltest tiles 1-4 scrolling seamlessly */
+/* Each image is 1260px wide × 700px tall (3 × 420px viewport sections) */
+
+const bgTiles = [coastalTest, coastalTest2, coastalTest3, coastalTest4]
+const TILE_WIDTH = 1260  // each image is 1260px wide
+const TILES_PER_CYCLE = 4
+const TOTAL_CYCLE_WIDTH = TILE_WIDTH * TILES_PER_CYCLE  // total width of all 4 tiles
+
+// Calculate scrolling position at full speed (no parallax)
+let scrollPos = scroll % TOTAL_CYCLE_WIDTH
+
+// Calculate which tile we're on and offset within it
+let currentTileIndex = Math.floor(scrollPos / TILE_WIDTH) % TILES_PER_CYCLE
+let offsetInTile = scrollPos % TILE_WIDTH
+
+// Draw tiles seamlessly: current tile and next tile
+for(let t = 0; t < 3; t++){
+  let tileIdx = (currentTileIndex + t) % TILES_PER_CYCLE
+  let drawX = t * TILE_WIDTH - offsetInTile
+  
+  // Source: the full image (sourceX, sourceY, sourceW, sourceH)
+  // Destination: canvas position (destX, destY, destW, destH)
+  ctx.drawImage(
+  bgTiles[tileIdx],
+  0,
+  0,
+  TILE_WIDTH,
+  H,        // full image height
+  drawX,
+  0,        // start at very top
+  TILE_WIDTH,
+  H
+)
+}
+
+/* FLOATING PLATFORMS (drawn after ground so they appear on top) */
+
+platformsCoastal.forEach(p=>{
+
+if(p.w >= 192){
+// use double tile image for wide platforms
+ctx.drawImage(doublegrassplatform, p.x, p.y, 192, 96)
+// if wider than 2 tiles, continue with single tiles
+for(let tx = 192; tx < p.w; tx += 96){
+ctx.drawImage(grassplatform, p.x + tx, p.y, 96, 96)
+}
+} else {
+for(let tx = 0; tx < p.w; tx += 96){
+ctx.drawImage(grassplatform, p.x + tx, p.y, 96, 96)
+}
+}
+
+})
+
+
+/* FLOWERS */
+
+flowersCoastal.forEach(f=>{
+
+ctx.drawImage(
+tulip,
+f.x-16,
+f.y-32,
+64,
+64
+)
+
+})
+
+/* SEAGULLS (no collision in test mode) */
+
+seagullsCoastal.forEach(s=>{
+ctx.drawImage(seagull, s.x, s.y, 80, 70)
+})
+
+/* LUNA */
+
+drawLuna()
+drawDust()
+
+}
+
+
+
 /* VILLAGE */
 
 let obstacles=[]
@@ -1910,9 +2142,9 @@ if(W - last.x < minGap) return
 
 }
 
-// All obstacles sit on the path surface (path drawn at y=500, surface ~y=505)
-// Luna's ground is y=540, obstacle tops at y=460 so sprites end ~y=540
-const OBSTACLE_Y = 460
+// All obstacles spawn on the ground
+// Luna's ground is y=540
+const OBSTACLE_Y = 540
 let oType = Math.floor(Math.random()*2)  // 0=flowerpot, 1=crate
 
 obstacles.push({
@@ -2078,119 +2310,39 @@ fadeTarget = "altarstory"
 function drawVillage(){
 
 
-/* SKY */
+/* BACKGROUND - coastaltest tiles 1-4 scrolling seamlessly */
+/* Each image is 1260px wide × 700px tall (3 × 420px viewport sections) */
 
-let sky = ctx.createLinearGradient(0,UI_H,0,H)
-sky.addColorStop(0,"#e6f2ff")
-sky.addColorStop(1,"#ffffff")
+const bgTiles = [coastalTest, coastalTest2, coastalTest3, coastalTest4]
+const TILE_WIDTH = 1260  // each image is 1260px wide
+const TILES_PER_CYCLE = 4
+const TOTAL_CYCLE_WIDTH = TILE_WIDTH * TILES_PER_CYCLE  // total width of all 4 tiles
 
-ctx.fillStyle = sky
-ctx.fillRect(0,UI_H,W,H-UI_H)
+// Calculate scrolling position at full speed (no parallax)
+let scrollPos = scroll % TOTAL_CYCLE_WIDTH
 
+// Calculate which tile we're on and offset within it
+let currentTileIndex = Math.floor(scrollPos / TILE_WIDTH) % TILES_PER_CYCLE
+let offsetInTile = scrollPos % TILE_WIDTH
 
-/* FIELDS BACKGROUND */
-
-ctx.fillStyle = "#cfe8a9"
-ctx.fillRect(0, 260, W, 120)
-
-for(let x = -(scroll % 200); x < W + 200; x += 200){
-
-ctx.fillStyle = "#b8db7a"
-ctx.fillRect(x, 280, 200, 80)
-
-}
-
-ctx.fillStyle = "#6fa64e"
-ctx.fillRect(0, 340, W, 100)
-
-for(let i=0;i<8;i++){
-
-let fx = (i*120 - scroll*0.2) % (W+120)
-
-ctx.fillStyle="#ffffff"
-ctx.beginPath()
-ctx.arc(fx, 320, 3, 0, Math.PI*2)
-ctx.fill()
-
-}
-
-
-
-
-
-/* BACKGROUND HOUSES */
-
-/* BACKGROUND HOUSE ROW */
-
-/* BACKGROUND HOUSE ROW */
-
-let rowWidth = 2520
-let scale = 0.35
-let drawWidth = rowWidth * scale
-
-for(let x = -(scroll * 0.3 % drawWidth); x < W + drawWidth; x += drawWidth){
-
-ctx.drawImage(
-houseRow,
-x,
-220,
-drawWidth,
-630 * scale
+// Draw tiles seamlessly: current tile and next tile
+for(let t = 0; t < 3; t++){
+  let tileIdx = (currentTileIndex + t) % TILES_PER_CYCLE
+  let drawX = t * TILE_WIDTH - offsetInTile
+  
+  // Source: the full image (sourceX, sourceY, sourceW, sourceH)
+  // Destination: canvas position (destX, destY, destW, destH)
+  ctx.drawImage(
+  bgTiles[tileIdx],
+  0,
+  0,
+  TILE_WIDTH,
+  H,        // full image height
+  drawX,
+  0,        // start at very top
+  TILE_WIDTH,
+  H
 )
-
-}
-
-
-for(let x = -(scroll * 0.3 % 128); x < W; x += 128){
-ctx.drawImage(
-bggrass,
-x,
-440,
-128,
-80
-)
-}
-
-/* COBBLE PATH */
-
-ctx.fillStyle="rgba(0,0,0,0.2)"
-ctx.fillRect(0,518,W,3)
-
-for(let x = -(scroll % 128); x < W; x += 128){
-
-ctx.drawImage(
-path,
-x,
-500,
-128,
-80
-)
-
-}
-
-/* GRASS BELOW PATH */
-
-
-for(let x = -(scroll % 128); x < W; x += 128){
-
-ctx.drawImage(
-grasstile,
-x,
-560,
-128,
-80
-)
-
-ctx.drawImage(
-grasstile,
-x,
-600,
-200,
-100
-)
-
-
-
 }
 
 
@@ -2276,6 +2428,8 @@ drawLuna()
 drawDust()
 
 }
+
+
 
 /* ALTAR */
 
@@ -3087,19 +3241,6 @@ confetti.forEach(c=>{
   }
 })
 
-// ── "YAY!" heading ─────────────────────────────────────────────
-ctx.save()
-ctx.font = "bold 52px 'DeliusSwash', sans-serif"
-ctx.textAlign = "center"
-ctx.textBaseline = "middle"
-// lilac with white outline
-ctx.strokeStyle = "white"
-ctx.lineWidth = 6
-ctx.strokeText("Yay! 🎉", W/2, 195)
-ctx.fillStyle = "#b070e0"
-ctx.fillText("Yay! 🎉", W/2, 195)
-ctx.restore()
-
 // ── Subtitle ────────────────────────────────────────────────────
 ctx.fillStyle = "#555"
 ctx.textAlign = "center"
@@ -3107,11 +3248,10 @@ ctx.font = "18px 'DeliusSwash', sans-serif"
 ctx.fillText("Luna delivered the rings! 💍", W/2, 240)
 
 // ── ANIMATED SCORE BARS ─────────────────────────────────────────
-// White rectangle in background image spans roughly y=255 to y=670
-// We fit everything inside that zone
+// Timing for slower animations
 const WIN_BAR_DELAY  = 40
-const WIN_BAR_DUR    = 55
-const WIN_BAR_GAP    = 18
+const WIN_BAR_DUR    = 80      // increased from 55 for slower fill
+const WIN_BAR_GAP    = 25      // increased for better spacing with slower bars
 const WIN_SCORE_DELAY = WIN_BAR_DELAY + (WIN_BAR_DUR + WIN_BAR_GAP) * 3 + 25
 
 const scores = [
@@ -3119,13 +3259,22 @@ const scores = [
   { img: gravybone,label: "Energy remaining",  value: Math.round(energy),mult: 1,  color: "#a78bfa", maxVal: 100 },
   { img: seagull,  label: "Obstacles avoided", value: obstaclesAvoided, mult: 5,  color: "#5bb8f5", maxVal: 15 },
 ]
+
+// Calculate displayed total score — updates as bars complete
+let displayedTotal = 0
+scores.forEach((s, i) => {
+  let barEnd = WIN_BAR_DELAY + (i + 1) * (WIN_BAR_DUR + WIN_BAR_GAP)
+  if(winAnimTimer >= barEnd){
+    displayedTotal += s.value * s.mult
+  }
+})
 const totalScore = flowers * 10 + Math.round(energy) + obstaclesAvoided * 5
 
-// Layout: bars start at y=270, row height 80px, icon 36px left of bar
-const barAreaTop = 270
-const barRowH    = 80
-const barLeft    = 54     // leave room for icon on left
-const barRight   = W - 20
+// Layout: more compact to fit in white box
+const barAreaTop = 260
+const barRowH    = 60
+const barLeft    = 54     
+const barRight   = W - 70 // reduced further for more margin
 const barW       = barRight - barLeft
 const barH       = 20
 const iconS      = 34
@@ -3138,9 +3287,6 @@ scores.forEach((s, i) => {
   let rowAlpha = Math.min(1, Math.max(0, (winAnimTimer - barStart + 12) / 12))
   if(rowAlpha <= 0) return
   ctx.globalAlpha = rowAlpha
-
-  // Icon left of bar
-  ctx.drawImage(s.img, barLeft - iconS - 6, rowY, iconS, iconS)
 
   // Label
   ctx.fillStyle = "#444"
@@ -3166,40 +3312,33 @@ scores.forEach((s, i) => {
     ctx.fill()
   }
 
-  // Pts label — appears once bar finishes
-  if(winAnimTimer >= barEnd){
-    ctx.fillStyle = s.color
-    ctx.font = "bold 15px 'DeliusSwash', sans-serif"
-    ctx.textAlign = "right"
-    ctx.fillText("+" + (s.value * s.mult) + " pts", barRight, rowY - 2)
+  // Icon moves with the bar fill — positioned at the end of filled portion
+  if(fillW > 0){
+    let iconX = barLeft + fillW - iconS/2
+    let iconY = rowY - 7
+    ctx.drawImage(s.img, iconX, iconY, iconS, iconS)
   }
 
   ctx.globalAlpha = 1
 })
 
-ctx.globalAlpha = 1
-
-// ── TOTAL SCORE ─────────────────────────────────────────────────
-let scoreAlpha = Math.min(1, Math.max(0, (winAnimTimer - WIN_SCORE_DELAY) / 25))
-if(scoreAlpha > 0){
-  let sc = scoreAlpha < 1 ? 0.7 + scoreAlpha * 0.3 : 1
-  ctx.save()
-  ctx.globalAlpha = scoreAlpha
-  ctx.translate(W/2, barAreaTop + scores.length * barRowH + 14)
-  ctx.scale(sc, sc)
+// ── DYNAMIC TOTAL SCORE ─────────────────────────────────────────
+// Display total that updates as each bar completes (counting effect)
+let totalShowAlpha = Math.min(1, Math.max(0, (winAnimTimer - (WIN_BAR_DELAY + WIN_BAR_DUR + WIN_BAR_GAP)) / 12))
+if(totalShowAlpha > 0){
+  ctx.globalAlpha = totalShowAlpha
   ctx.font = "bold 28px 'DeliusSwash', sans-serif"
   ctx.fillStyle = "#e05cb0"
   ctx.textAlign = "center"
   ctx.textBaseline = "middle"
-  ctx.fillText("Total: " + totalScore + " pts 🌸", 0, 0)
-  ctx.restore()
+  ctx.fillText("Total: " + displayedTotal + " pts 🌸", W/2, barAreaTop + scores.length * barRowH + 8)
   ctx.globalAlpha = 1
 }
 
 // ── BUTTONS ─────────────────────────────────────────────────────
 let btnAlpha = Math.min(1, Math.max(0, (winAnimTimer - WIN_SCORE_DELAY - 35) / 20))
 if(btnAlpha > 0){
-  let btnY = barAreaTop + scores.length * barRowH + 50
+  let btnY = barAreaTop + scores.length * barRowH + 48
 
   function drawWinButton(cx, by, bw, bh, fillColor, strokeColor, label, labelColor, fontSize){
     let bx = cx - bw/2
@@ -3783,6 +3922,7 @@ if(state==="gardenstory") updateGardenStory()
 if(state==="garden") updateGarden()
 if(state==="coastalstory") updateCoastalStory()
 if(state==="coastal") updateCoastal()
+if(state==="coastaltest") updateCoastalTest()
 if(state==="villagestory") updateVillageStory()
 if(state==="village") updateVillage()
 if(state==="altarstory") updateAltarStory()
@@ -3895,6 +4035,7 @@ return
 
 if(state==="garden") drawGarden()
 if(state==="coastal") drawCoastal()
+if(state==="coastaltest") drawCoastalTest()
 if(state==="village") drawVillage()
 if(state==="altar") drawAltar()
 
@@ -3910,6 +4051,7 @@ if(hitFlashTimer > 0){
 if(
 state === "garden" ||
 state === "coastal" ||
+state === "coastaltest" ||
 state === "village" ||
 (state === "altar" && rhythmState !== "failed")
 ){
